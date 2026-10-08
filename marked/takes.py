@@ -66,3 +66,31 @@ def latest_median_wpm() -> float | None:
         if wpm:
             return float(wpm)
     return None
+
+
+def script_key(text: str) -> str:
+    """Hash of the script text ignoring whitespace differences, to group takes of one script."""
+    import hashlib
+    norm = " ".join(text.split())
+    return hashlib.sha1(norm.encode("utf-8")).hexdigest()[:12]
+
+
+def takes_with_same_script(take_id: str) -> list[dict]:
+    """All analyses sharing this take's script, oldest first (includes the take itself)."""
+    current = load_take(take_id)
+    if not current:
+        return []
+    def key_of(a: dict) -> str | None:
+        if a.get("script_key"):
+            return a["script_key"]
+        p = take_path(a["take_id"]) / "script.md"
+        return script_key(p.read_text(encoding="utf-8")) if p.exists() else None
+
+    key = key_of(current)
+    out = []
+    for t in list_takes():
+        a = load_take(t["take_id"])
+        if a and key is not None and key_of(a) == key:
+            out.append(a)
+    out.sort(key=lambda a: a.get("created_at") or "")
+    return out

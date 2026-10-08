@@ -66,6 +66,7 @@ def reanalyze(take_id: str, script_text: str, settings: Settings, label: str | N
         "transcript": {"text": transcript.text, "words": [{"i": i, "text": w.text, "start": w.start, "end": w.end}
                                                           for i, w in enumerate(transcript.words)]},
         "audio_url": f"/takes/{take_id}/audio.wav",
+        "script_key": takes.script_key(script_text),
         "timing": timing or prev.get("timing", {}),
     })
     from marked.define import check_defines, define_summary

@@ -11,6 +11,18 @@ let meter: Meter | null = null;
 let startedAt = 0;
 let timer = 0;
 let latestDb = -100;
+let paceRec: SpeechRecognitionLike | null = null;
+
+interface SpeechRecognitionLike {
+  continuous: boolean; interimResults: boolean; lang: string;
+  onresult: ((ev: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((ev: unknown) => void) | null;
+  start(): void; stop(): void;
+}
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>;
+}
 
 const CALIBRATION_SENTENCE = "The quick brown fox jumps over the lazy dog, and the results were clear by the third week.";
 
@@ -83,10 +95,12 @@ export function renderRehearse(root: HTMLElement, goToReport: () => void): void 
       recorder.onstop = async () => {
         const blob = new Blob(chunks, { type: recorder?.mimeType || mime || "audio/webm" });
         closeMic();
+        stopPace();
         clearInterval(timer);
         await submit(blob, `take.${extFor(blob.type)}`);
       };
       recorder.start(250);
+      startPace();
       startedAt = performance.now();
       timer = window.setInterval(updatePlanned, 200);
       recBtn.textContent = "Stop and analyze";
@@ -162,6 +176,55 @@ export function renderRehearse(root: HTMLElement, goToReport: () => void): void 
     calibInfo.textContent = `Calibrated: your normal speaking level is ${median.toFixed(0)} dBFS. The meter is now relative to you.`;
   });
 
+  // Live pace (stretch): browser speech recognition, opt-in because Chrome's implementation
+  // sends audio to the browser vendor. Hidden entirely where the API does not exist.
+  const SR = (window as unknown as { SpeechRecognition?: new () => SpeechRecognitionLike }).SpeechRecognition
+    ?? (window as unknown as { webkitSpeechRecognition?: new () => SpeechRecognitionLike }).webkitSpeechRecognition;
+  const paceOpt = h("input", { type: "checkbox" }) as HTMLInputElement;
+  const paceValue = h("div", { class: "value muted" }, "–");
+  const pacePanel = SR ? h("div", { class: "pace" },
+    h("h3", {}, "Live pace (approximate)"),
+    h("label", { class: "small" }, paceOpt, " Use the browser's speech recognition for a rough live words-per-minute. ",
+      h("span", { class: "warn" }, "In Chrome this sends audio to Google; off by default.")),
+    paceValue) : null;
+  const startPace = () => {
+    if (!SR || !paceOpt.checked) return;
+    const rec = new SR();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = "en-US";
+    const samples: { t: number; words: number }[] = [];
+    let committed = 0;
+    rec.onresult = (ev: SpeechRecognitionEventLike) => {
+      let interim = 0;
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const n = ev.results[i][0].transcript.trim().split(/\s+/).filter(Boolean).length;
+        if (ev.results[i].isFinal) committed += n;
+        else interim += n;
+      }
+      samples.push({ t: performance.now(), words: committed + interim });
+      const now = performance.now();
+      const old = samples.find((s) => now - s.t <= 10000) ?? samples[0];
+      const dt = (now - old.t) / 1000;
+      if (dt > 3) {
+        const wpm = Math.max(0, (samples[samples.length - 1].words - old.words) / (dt / 60));
+        paceValue.textContent = `${Math.round(wpm)} wpm over the last ${Math.round(dt)} s`;
+        paceValue.className = "value";
+      }
+    };
+    rec.onerror = () => { paceValue.textContent = "speech recognition unavailable"; };
+    try {
+      rec.start();
+      paceRec = rec;
+    } catch {
+      paceValue.textContent = "could not start";
+    }
+  };
+  const stopPace = () => {
+    try { paceRec?.stop(); } catch { /* ignore */ }
+    paceRec = null;
+  };
+
   const sectionList = h("ul", { class: "section-list" },
     ...secs.map((s) => h("li", {}, h("span", { class: "sec-name" }, s.name || "Untitled"), " ",
       h("span", { class: "muted" }, s.budget_s !== null ? fmtClock(s.budget_s) : "no budget", ` · ${s.words} words`))));
@@ -170,7 +233,7 @@ export function renderRehearse(root: HTMLElement, goToReport: () => void): void 
     h("div", { class: "rehearse-layout" },
       h("div", { class: "rehearse-main" },
         h("div", { class: "rec-panel" }, clock, planned, recBtn, labelInput, status),
-        h("div", { class: "meter-panel" }, h("h3", {}, "Loudness"), meterWrap),
+        h("div", { class: "meter-panel" }, h("h3", {}, "Loudness"), meterWrap, pacePanel),
         h("div", { class: "upload-panel" },
           h("h3", {}, "…or upload a recording"),
           h("p", { class: "muted small" }, "Any audio file works (webm, wav, m4a, mp3). Useful for takes recorded on a phone."),
@@ -195,6 +258,8 @@ export function stopRehearsal(): void {
   else closeAll();
 }
 function closeAll(): void {
+  try { paceRec?.stop(); } catch { /* ignore */ }
+  paceRec = null;
   meter?.stop();
   meter = null;
   stream?.getTracks().forEach((t) => t.stop());

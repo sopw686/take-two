@@ -126,6 +126,36 @@ async def take_audio(take_id: str) -> FileResponse:
     return FileResponse(p, media_type="audio/wav")
 
 
+@app.post("/api/takes/{take_id}/coach")
+async def coach_take(take_id: str) -> dict:
+    from marked.coaching import coach
+    from marked.llm import get_llm
+    try:
+        data = takes.load_take(take_id)
+    except ValueError:
+        raise HTTPException(400, "bad take id")
+    if data is None:
+        raise HTTPException(404, "take not found")
+    earlier = [a for a in takes.takes_with_same_script(take_id) if a.get("take_id") != take_id]
+    data["coaching"] = await run_in_threadpool(coach, data, get_llm(), earlier)
+    takes.save_json(takes.take_path(take_id) / "analysis.json", data)
+    return data
+
+
+@app.get("/api/compare")
+async def compare(take_id: str) -> dict:
+    from marked.compare import compare_takes
+    try:
+        group = takes.takes_with_same_script(take_id)
+    except ValueError:
+        raise HTTPException(400, "bad take id")
+    if not group:
+        raise HTTPException(404, "take not found")
+    result = compare_takes(group)
+    result["takes_info"] = [{"take_id": a["take_id"], "created_at": a.get("created_at"), "label": a.get("label", "")} for a in group]
+    return result
+
+
 # ---- LLM features ------------------------------------------------------------
 from marked.suggest import router as suggest_router  # noqa: E402
 

@@ -1,4 +1,4 @@
-import type { Analysis, Health, Settings, SuggestResponse, TakeSummary } from "./types";
+import type { Analysis, CompareResult, Health, Settings, SuggestResponse, TakeSummary } from "./types";
 
 async function j<T>(r: Response): Promise<T> {
   if (!r.ok) {
@@ -46,4 +46,5 @@ export const api = {
       body: JSON.stringify({ script, accepted }),
     }).then((r) => j<{ text: string }>(r)),
   coach: (takeId: string) => fetch(`/api/takes/${takeId}/coach`, { method: "POST" }).then((r) => j<Analysis>(r)),
+  compare: (takeId: string) => fetch(`/api/compare?take_id=${encodeURIComponent(takeId)}`).then((r) => j<CompareResult>(r)),
 };

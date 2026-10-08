@@ -26,6 +26,7 @@ Everything runs locally by default. Audio never leaves your computer unless you 
 | `OPENAI_API_KEY` + `MARKED_STT=openai` | Transcribe with OpenAI's Whisper API instead of locally. The UI shows a banner when audio leaves the machine. |
 | `MARKED_STT_MODEL` | Local model: `base.en` (faster), `small.en` (default), `medium.en`, … |
 | `MARKED_STT_DEVICE` | `auto` (default), `cuda`, or `cpu`. |
+| `MARKED_LLM=fake` | Development only: a labelled stand-in model so the suggestion UI can be tried without a key. Not a fallback; without it and without a key, suggestions stay off. |
 
 ## Mark syntax
 
@@ -39,6 +40,24 @@ Everything runs locally by default. Audio never leaves your computer unless you 
 | `*word*` | Emphasis (experimental, off by default) | Loudness and pitch of the word vs. the rest of its line |
 
 All thresholds are yours to change in **Settings**. Wording in the report is "met your mark" / "diverged from your mark"; there is no score.
+
+## What the report shows
+
+- A short summary: "2 of 3 key lines met your marks. Methods ran 0:12 over budget. 'Convolution' was never defined."
+- Section bars: budget vs. spoken time.
+- The script itself with every mark colored met / close / diverged; hover for the numbers in plain words; click any line or mark to hear that moment.
+- Takes tab: every take you recorded, and a mark-by-mark comparison across takes of the same script ("you rushed this key line in 3 of 4 takes").
+- Optional, only when switched on in Settings: a "conference conventions" preset (overall pace band, filler words per 100) and an experimental emphasis check for `*word*`.
+- With an API key: "Suggestions based on your measurements", at most three, each citing a measured number and the mark it concerns.
+
+## Tests
+
+```bash
+uv run pytest            # unit tests, about a second
+uv run pytest -m slow    # the synthetic fixture through real local speech-to-text
+```
+
+See `TESTING.md` for what is covered, what was checked by hand, and known weak spots.
 
 ## Layout
 

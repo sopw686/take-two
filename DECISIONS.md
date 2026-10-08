@@ -47,3 +47,17 @@ Each entry: what was decided, what else was considered, why.
 **Takes are directories of files** (`takes/<id>/audio.orig.*, audio.wav, script.md, transcript.json, analysis.json`). Re-analysis reuses the stored transcript, so changing a threshold or a mark never re-runs speech-to-text.
 
 **The "current section" shown while rehearsing is the *planned* section** at the elapsed time (cumulative budgets), labelled as such. Live speech recognition in the browser is a stretch item; a plan-based indicator is honest and works everywhere.
+
+## Stretch features
+
+**`MARKED_LLM=fake` is a labelled development stand-in, not a fallback.** The brief forbids substituting a heuristic for suggestions when no key is set, and the app obeys: without a key the button is disabled with a one-line reason. The fake exists only so the review UI (ghost marks, reasons, accept/reject, caps) can be exercised and demoed without spending on a model; the UI names the provider "fake (development stand-in, not a real model)".
+
+**Live pace is opt-in and warns about where the audio goes.** The Web Speech API in Chrome sends audio to Google. That contradicts "audio stays local", so the live pace checkbox is off by default, carries the warning inline, and the whole panel is hidden where the API does not exist. The measured report never depends on it.
+
+**Coaching gets measurements and history, never audio.** The coaching prompt receives a compacted JSON of marks and outcomes (plus the same marks' outcomes in earlier takes of the same script) and must cite a number in every suggestion; code drops suggestions without one and caps at three. If every mark was met, the model is not even called.
+
+**Takes are grouped by a whitespace-insensitive hash of the script text.** Comparison therefore works across takes of the same script even after cosmetic edits, and stops working after a real edit, which is the right behaviour: the marks moved.
+
+**Emphasis uses Praat (parselmouth) when installed, else librosa's pyin, else loudness only.** All three are optional so a minimal install still runs; the status is labelled experimental in the UI and the thresholds (+3 dB or +10 % pitch over the line's median) are deliberately coarse.
+
+**Conventions preset nudges Whisper with a filler-laden prompt only when the preset is on.** Whisper suppresses "um"/"uh" by default; an `initial_prompt` containing fillers makes it transcribe them more often. Doing that always would change transcripts for users who never asked for filler counts.

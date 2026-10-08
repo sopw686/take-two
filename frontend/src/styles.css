@@ -164,3 +164,15 @@ details.card summary { cursor: pointer; font-family: var(--serif); font-size: 17
   .editor-layout, .rehearse-layout { grid-template-columns: 1fr; }
   .cheatsheet { border-left: 0; padding-left: 0; }
 }
+
+/* compare */
+.cmp-wrap { overflow-x: auto; }
+.cmp { border-collapse: collapse; width: 100%; font-size: 14px; }
+.cmp th, .cmp td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.cmp th { color: var(--muted); font-weight: 500; }
+.cmp-name { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+.cmp-name .small { font-family: var(--serif); font-size: 13px; white-space: normal; max-width: 320px; }
+
+/* live pace */
+.pace { margin-top: 12px; }
+.pace .value { font-family: var(--serif); font-size: 28px; }

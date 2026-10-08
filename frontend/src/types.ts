@@ -190,3 +190,25 @@ export interface SuggestResponse {
   rate_source: string;
   lines: { index: number; raw_line_no: number; text: string }[];
 }
+
+export interface CompareMark {
+  kind: "KEY" | "/" | "//" | "section" | "DEFINE";
+  line?: number;
+  word_index?: number;
+  name?: string;
+  term?: string;
+  text?: string;
+  takes: number;
+  statuses: string[];
+  values: (number | null)[];
+  met: number;
+  latest: string | null;
+}
+
+export interface CompareResult {
+  takes: number;
+  take_ids: string[];
+  takes_info: { take_id: string; created_at: string | null; label: string }[];
+  marks: CompareMark[];
+  summary: string[];
+}
