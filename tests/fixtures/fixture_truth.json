@@ -1,0 +1,217 @@
+{
+ "sample_rate": 16000,
+ "duration_s": 33.705,
+ "lines": [
+  {
+   "index": 0,
+   "text": "Good morning, and thank you for having me.",
+   "script": "Good morning, and thank you for having me.",
+   "start": 0.0,
+   "end": 2.464,
+   "stretch_rate": 1.0,
+   "pause_after": 0.5
+  },
+  {
+   "index": 1,
+   "text": "Today I will talk about how we measured heat stress on coral reefs.",
+   "script": "Today I will talk about how we measured heat stress on coral reefs.",
+   "start": 2.964,
+   "end": 6.708,
+   "stretch_rate": 1.0,
+   "pause_after": 0.5
+  },
+  {
+   "index": 2,
+   "text": "We used twenty years of satellite temperature records.",
+   "script": "We used twenty years / of satellite temperature records.",
+   "start": 7.208,
+   "end": 10.216,
+   "stretch_rate": 1.0,
+   "pause_after": 0.5
+  },
+  {
+   "index": 3,
+   "text": "For each reef we computed degree heating weeks, which is the accumulated heat above the summer maximum.",
+   "script": "For each reef we computed degree heating weeks, [DEFINE: degree heating weeks] which is the accumulated heat above the summer maximum.",
+   "start": 10.716,
+   "end": 16.252,
+   "stretch_rate": 1.0,
+   "pause_after": 0.5
+  },
+  {
+   "index": 4,
+   "text": "We then trained a model on reef depth and heat stress.",
+   "script": "We then trained a model on reef depth and heat stress.",
+   "start": 16.752,
+   "end": 19.6,
+   "stretch_rate": 1.0,
+   "pause_after": 0.5
+  },
+  {
+   "index": 5,
+   "text": "The model predicted bleaching three weeks in advance.",
+   "script": "[KEY] The model predicted bleaching three weeks in advance. //",
+   "start": 20.1,
+   "end": 22.217,
+   "stretch_rate": 1.3,
+   "pause_after": 1.6
+  },
+  {
+   "index": 6,
+   "text": "This is two weeks earlier than the current warning system.",
+   "script": "This is two weeks earlier than the current warning system.",
+   "start": 23.817,
+   "end": 26.729,
+   "stretch_rate": 1.0,
+   "pause_after": 0.5
+  },
+  {
+   "index": 7,
+   "text": "The errors were not random. They clustered on deep reefs.",
+   "script": "[KEY] The errors were not random. / They clustered on deep reefs.",
+   "start": 27.229,
+   "end": 31.329,
+   "stretch_rate": 0.8,
+   "pause_after": 1.0
+  },
+  {
+   "index": 8,
+   "text": "Thank you.",
+   "script": "Thank you.",
+   "start": 32.329,
+   "end": 32.905,
+   "stretch_rate": 1.0,
+   "pause_after": 0.8
+  }
+ ],
+ "silences": [
+  {
+   "after_text": "Good morning, and thank you for having me.",
+   "start": 2.464,
+   "end": 2.964,
+   "duration": 0.5
+  },
+  {
+   "after_text": "Today I will talk about how we measured heat stress on coral reefs.",
+   "start": 6.708,
+   "end": 7.208,
+   "duration": 0.5
+  },
+  {
+   "after_text": "We used twenty years of satellite temperature records.",
+   "start": 10.216,
+   "end": 10.716,
+   "duration": 0.5
+  },
+  {
+   "after_text": "For each reef we computed degree heating weeks, which is the accumulated heat above the summer maximum.",
+   "start": 16.252,
+   "end": 16.752,
+   "duration": 0.5
+  },
+  {
+   "after_text": "We then trained a model on reef depth and heat stress.",
+   "start": 19.6,
+   "end": 20.1,
+   "duration": 0.5
+  },
+  {
+   "after_text": "The model predicted bleaching three weeks in advance.",
+   "start": 22.217,
+   "end": 23.817,
+   "duration": 1.6
+  },
+  {
+   "after_text": "This is two weeks earlier than the current warning system.",
+   "start": 26.729,
+   "end": 27.229,
+   "duration": 0.5
+  },
+  {
+   "after_text": "The errors were not random.",
+   "start": 29.029,
+   "end": 29.329,
+   "duration": 0.3
+  },
+  {
+   "after_text": "They clustered on deep reefs.",
+   "start": 31.329,
+   "end": 32.329,
+   "duration": 1.0
+  },
+  {
+   "after_text": "Thank you.",
+   "start": 32.905,
+   "end": 33.705,
+   "duration": 0.8
+  }
+ ],
+ "sections": [
+  {
+   "name": "Opening",
+   "start": 0.0,
+   "end": 7.208,
+   "spoken_duration": 6.708,
+   "budget_s": 8,
+   "expected_status": "met"
+  },
+  {
+   "name": "Methods",
+   "start": 7.208,
+   "end": 20.1,
+   "spoken_duration": 12.392,
+   "budget_s": 6,
+   "expected_status": "over"
+  },
+  {
+   "name": "Results",
+   "start": 20.1,
+   "end": 32.905,
+   "spoken_duration": 12.805,
+   "budget_s": 14,
+   "expected_status": "met"
+  }
+ ],
+ "expected": {
+  "key_lines": {
+   "The model predicted bleaching three weeks in advance.": {
+    "rate": "diverged",
+    "pause_after": "met"
+   },
+   "The errors were not random. They clustered on deep reefs.": {
+    "rate": "met",
+    "pause_after": "met"
+   }
+  },
+  "pauses": [
+   {
+    "line_text": "We used twenty years of satellite temperature records.",
+    "kind": "/",
+    "status": "missing"
+   },
+   {
+    "line_text": "The model predicted bleaching three weeks in advance.",
+    "kind": "//",
+    "status": "met",
+    "measured_s": 1.6
+   },
+   {
+    "line_text": "The errors were not random. They clustered on deep reefs.",
+    "kind": "/",
+    "status": "short",
+    "measured_s": 0.3
+   }
+  ],
+  "defines": [
+   {
+    "term": "degree heating weeks",
+    "defined": true
+   }
+  ],
+  "tolerances": {
+   "pause_s": 0.15,
+   "section_s": 0.6,
+   "line_s": 0.4
+  }
+ }
+}

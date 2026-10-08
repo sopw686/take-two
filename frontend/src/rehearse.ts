@@ -1,0 +1,203 @@
+import { api } from "./api";
+import { clear, fmtClock, h } from "./dom";
+import { Meter, extFor, pickMimeType } from "./meter";
+import { plannedSectionAt, sections } from "./scriptinfo";
+import { state } from "./state";
+
+let stream: MediaStream | null = null;
+let recorder: MediaRecorder | null = null;
+let chunks: Blob[] = [];
+let meter: Meter | null = null;
+let startedAt = 0;
+let timer = 0;
+let latestDb = -100;
+
+const CALIBRATION_SENTENCE = "The quick brown fox jumps over the lazy dog, and the results were clear by the third week.";
+
+export function renderRehearse(root: HTMLElement, goToReport: () => void): void {
+  clear(root);
+  const script = state.scriptText;
+  const secs = sections(script);
+  if (!script.trim()) {
+    root.append(h("p", { class: "muted" }, "Write or load a script first (Script tab)."));
+    return;
+  }
+
+  const clock = h("div", { class: "clock" }, "0:00");
+  const planned = h("div", { class: "planned muted" }, "");
+  const meterBar = h("div", { class: "meter-fill" });
+  const meterLabel = h("div", { class: "meter-label muted small" }, "");
+  const meterWrap = h("div", { class: "meter" }, h("div", { class: "meter-track" }, h("div", { class: "meter-baseline" }), meterBar), meterLabel);
+  const status = h("p", { class: "status muted" }, "");
+  const recBtn = h("button", { class: "primary big", type: "button" }, "Start recording") as HTMLButtonElement;
+  const labelInput = h("input", { type: "text", placeholder: "Label this take (optional)", class: "label-input" }) as HTMLInputElement;
+
+  const updatePlanned = () => {
+    const t = (performance.now() - startedAt) / 1000;
+    clock.textContent = fmtClock(t);
+    const p = plannedSectionAt(secs, t);
+    if (p.section) planned.textContent = `Planned section at this point: ${p.section.name || "Untitled"} (${fmtClock(p.into)} of ${fmtClock(p.total)} budget)`;
+    else if (p.total > 0) planned.textContent = `Past the total budget by ${fmtClock(p.into)}`;
+    else planned.textContent = "No section budgets set; add [m:ss] to section headers to track them here.";
+  };
+
+  const showLevel = (db: number) => {
+    latestDb = db;
+    const base = state.calibration?.baseline_db ?? null;
+    if (base !== null) {
+      const rel = db - base;
+      const pct = Math.max(0, Math.min(100, 50 + rel * 2.5));
+      meterBar.style.width = `${pct}%`;
+      meterBar.className = "meter-fill " + (rel > 6 ? "loud" : rel < -12 ? "quiet" : "ok");
+      meterLabel.textContent = db < -60 ? "silence" : `${rel >= 0 ? "+" : ""}${rel.toFixed(0)} dB relative to your calibrated level`;
+    } else {
+      const pct = Math.max(0, Math.min(100, (db + 60) * (100 / 60)));
+      meterBar.style.width = `${pct}%`;
+      meterBar.className = "meter-fill ok";
+      meterLabel.textContent = db < -60 ? "silence" : `${db.toFixed(0)} dBFS (calibrate below to make this relative to you)`;
+    }
+  };
+
+  async function openMic(): Promise<MediaStream> {
+    if (stream) return stream;
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    meter = new Meter();
+    meter.onLevel = showLevel;
+    await meter.start(stream);
+    return stream;
+  }
+  function closeMic(): void {
+    meter?.stop();
+    meter = null;
+    stream?.getTracks().forEach((t) => t.stop());
+    stream = null;
+  }
+
+  async function startRecording(): Promise<void> {
+    try {
+      const s = await openMic();
+      const mime = pickMimeType();
+      recorder = new MediaRecorder(s, mime ? { mimeType: mime } : undefined);
+      chunks = [];
+      recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: recorder?.mimeType || mime || "audio/webm" });
+        closeMic();
+        clearInterval(timer);
+        await submit(blob, `take.${extFor(blob.type)}`);
+      };
+      recorder.start(250);
+      startedAt = performance.now();
+      timer = window.setInterval(updatePlanned, 200);
+      recBtn.textContent = "Stop and analyze";
+      recBtn.classList.add("recording");
+      status.textContent = "Recording. Speak as you would in the talk.";
+    } catch (err) {
+      status.textContent = `Microphone unavailable: ${(err as Error).message}. You can upload a recording instead.`;
+    }
+  }
+
+  async function submit(blob: Blob, filename: string): Promise<void> {
+    recBtn.setAttribute("disabled", "");
+    recBtn.textContent = "Analyzing…";
+    status.textContent = state.health?.audio_leaves_machine
+      ? "Transcribing with the configured cloud service…"
+      : `Transcribing on this computer (${state.health?.stt.model ?? "local model"})…`;
+    try {
+      const analysis = await api.createTake(blob, filename, state.scriptText, state.effectiveSettings(), labelInput.value.trim());
+      state.setAnalysis(analysis);
+      goToReport();
+    } catch (err) {
+      status.textContent = `Analysis failed: ${(err as Error).message}`;
+      recBtn.removeAttribute("disabled");
+      recBtn.textContent = "Start recording";
+      recBtn.classList.remove("recording");
+    }
+  }
+
+  recBtn.addEventListener("click", () => {
+    if (recorder && recorder.state === "recording") recorder.stop();
+    else void startRecording();
+  });
+
+  const fileInput = h("input", { type: "file", accept: "audio/*,.webm,.wav,.m4a,.mp3,.ogg" }) as HTMLInputElement;
+  fileInput.addEventListener("change", () => {
+    const f = fileInput.files?.[0];
+    if (f) void submit(f, f.name);
+  });
+
+  // Calibration -------------------------------------------------------------
+  const calibInfo = h("p", { class: "muted small" },
+    state.calibration ? `Calibrated ${new Date(state.calibration.measured_at).toLocaleString()} at ${state.calibration.baseline_db.toFixed(0)} dBFS.` : "Not calibrated yet. The meter will show absolute levels until you do.");
+  const calibBtn = h("button", { class: "ghost-btn", type: "button" }, "Calibrate (4 s)") as HTMLButtonElement;
+  calibBtn.addEventListener("click", async () => {
+    try {
+      await openMic();
+    } catch (err) {
+      calibInfo.textContent = `Microphone unavailable: ${(err as Error).message}`;
+      return;
+    }
+    calibBtn.setAttribute("disabled", "");
+    const samples: number[] = [];
+    const end = performance.now() + 4000;
+    calibInfo.textContent = "Read the sentence aloud now…";
+    await new Promise<void>((resolve) => {
+      const iv = setInterval(() => {
+        if (latestDb > -55) samples.push(latestDb);
+        if (performance.now() > end) {
+          clearInterval(iv);
+          resolve();
+        }
+      }, 50);
+    });
+    if (!recorder) closeMic();
+    calibBtn.removeAttribute("disabled");
+    if (samples.length < 10) {
+      calibInfo.textContent = "Heard too little speech to calibrate. Try again a little closer to the microphone.";
+      return;
+    }
+    samples.sort((a, b) => a - b);
+    const median = samples[Math.floor(samples.length / 2)];
+    state.setCalibration({ baseline_db: median, measured_at: new Date().toISOString() });
+    calibInfo.textContent = `Calibrated: your normal speaking level is ${median.toFixed(0)} dBFS. The meter is now relative to you.`;
+  });
+
+  const sectionList = h("ul", { class: "section-list" },
+    ...secs.map((s) => h("li", {}, h("span", { class: "sec-name" }, s.name || "Untitled"), " ",
+      h("span", { class: "muted" }, s.budget_s !== null ? fmtClock(s.budget_s) : "no budget", ` · ${s.words} words`))));
+
+  root.append(
+    h("div", { class: "rehearse-layout" },
+      h("div", { class: "rehearse-main" },
+        h("div", { class: "rec-panel" }, clock, planned, recBtn, labelInput, status),
+        h("div", { class: "meter-panel" }, h("h3", {}, "Loudness"), meterWrap),
+        h("div", { class: "upload-panel" },
+          h("h3", {}, "…or upload a recording"),
+          h("p", { class: "muted small" }, "Any audio file works (webm, wav, m4a, mp3). Useful for takes recorded on a phone."),
+          fileInput),
+      ),
+      h("aside", { class: "rehearse-side" },
+        h("h3", {}, "Sections"),
+        sectionList,
+        h("h3", {}, "Calibration"),
+        h("p", { class: "small" }, "Read this at your normal speaking volume:"),
+        h("blockquote", {}, CALIBRATION_SENTENCE),
+        calibBtn,
+        calibInfo,
+        state.calibration ? h("button", { class: "ghost-btn small", type: "button", onClick: () => { state.setCalibration(null); renderRehearse(root, goToReport); } }, "Forget calibration") : null,
+      ),
+    ),
+  );
+}
+
+export function stopRehearsal(): void {
+  if (recorder && recorder.state === "recording") recorder.stop();
+  else closeAll();
+}
+function closeAll(): void {
+  meter?.stop();
+  meter = null;
+  stream?.getTracks().forEach((t) => t.stop());
+  stream = null;
+  clearInterval(timer);
+}
