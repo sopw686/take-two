@@ -66,3 +66,11 @@ def test_strip_marks():
 def test_format_budget():
     assert format_budget(90) == "1:30"
     assert format_budget(None) == ""
+
+
+def test_raw_line_numbers_survive_multiline_comments():
+    text = "<!-- a\nmulti-line\ncomment -->\n## S [0:10]\nFirst line.\n\nSecond line."
+    s = parse_script(text)
+    assert [ln.raw_line_no for ln in s.lines] == [4, 6]
+    assert s.sections[0].raw_line_no == 3
+    assert text.splitlines()[4] == "First line."

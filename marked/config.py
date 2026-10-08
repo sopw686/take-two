@@ -20,6 +20,7 @@ STT_VAD_FILTER = os.environ.get("MARKED_STT_VAD_FILTER", "1") not in ("0", "fals
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.environ.get("MARKED_ANTHROPIC_MODEL", "claude-opus-5-5")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+LLM_MODE = os.environ.get("MARKED_LLM", "auto")  # auto | fake (development stand-in for the suggestion UI)
 
 
 class Settings(BaseModel):

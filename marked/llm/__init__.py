@@ -11,7 +11,10 @@ _instance: LLM | None = None
 def get_llm() -> LLM:
     global _instance
     if _instance is None:
-        if config.ANTHROPIC_API_KEY:
+        if config.LLM_MODE == "fake":
+            from marked.llm.fake_llm import FakeLLM
+            _instance = FakeLLM()
+        elif config.ANTHROPIC_API_KEY:
             from marked.llm.anthropic_llm import AnthropicLLM
             _instance = AnthropicLLM(model=config.ANTHROPIC_MODEL)
         else:

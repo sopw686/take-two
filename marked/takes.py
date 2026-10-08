@@ -57,3 +57,12 @@ def list_takes() -> list[dict]:
 def load_take(take_id: str) -> dict | None:
     p = take_path(take_id) / "analysis.json"
     return load_json(p) if p.exists() else None
+
+
+def latest_median_wpm() -> float | None:
+    for t in list_takes():
+        data = load_take(t["take_id"])
+        wpm = (data or {}).get("baseline", {}).get("median_wpm")
+        if wpm:
+            return float(wpm)
+    return None

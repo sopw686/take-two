@@ -21,6 +21,11 @@ PAUSE_RE = re.compile(r"^(?P<kind>//?)$")
 EMPH_RE = re.compile(r"^\*(?P<word>[^\s*]+)\*$")
 COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 
+
+def blank_comments(text: str) -> str:
+    """Remove <!-- comments --> but keep their newlines so line numbers stay stable."""
+    return COMMENT_RE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+
 _ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
          "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen",
          "seventeen", "eighteen", "nineteen"]
@@ -161,7 +166,7 @@ def strip_line_marks(raw: str) -> tuple[str, bool, list[str], list[PauseMark], l
 
 
 def parse_script(text: str) -> Script:
-    text = COMMENT_RE.sub("", text)
+    text = blank_comments(text)
     sections: list[Section] = []
     lines: list[Line] = []
     defines: list[DefineMark] = []
@@ -204,7 +209,7 @@ def parse_script(text: str) -> Script:
 def strip_marks(text: str) -> str:
     """Plain prose: no section headers, no marks. One line per script line."""
     out = []
-    for raw in COMMENT_RE.sub("", text).splitlines():
+    for raw in blank_comments(text).splitlines():
         if not raw.strip() or is_section_header(raw):
             continue
         out.append(strip_line_marks(raw)[0])

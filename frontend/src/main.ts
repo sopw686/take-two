@@ -71,7 +71,15 @@ async function boot(): Promise<void> {
 }
 
 window.addEventListener("hashchange", render);
-(document.getElementById("settings-btn") as HTMLButtonElement).addEventListener("click", () => openSettings(() => {
-  if (currentTab() === "report") render();
+(document.getElementById("settings-btn") as HTMLButtonElement).addEventListener("click", () => openSettings(async () => {
+  const a = state.analysis;
+  if (a) {
+    try {
+      state.setAnalysis(await api.reanalyze(a.take_id, state.scriptText, state.effectiveSettings()));
+    } catch (err) {
+      console.warn("re-analysis after settings change failed", err);
+    }
+  }
+  render();
 }));
 void boot();

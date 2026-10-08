@@ -81,7 +81,7 @@ export function renderEditor(root: HTMLElement): void {
     refresh();
   };
 
-  const suggestBtn = h("button", { class: "primary", type: "button", onClick: () => openSuggest(ta.value) }, "Suggest marks…");
+  const suggestBtn = h("button", { class: "primary", type: "button", onClick: () => openSuggest(root, ta.value, () => renderEditor(root)) }, "Suggest marks…");
   const llm = state.health?.llm;
   const suggestNote = h("p", { class: "muted small" },
     llm?.available
