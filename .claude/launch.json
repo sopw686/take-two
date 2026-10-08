@@ -4,7 +4,7 @@
     {
       "name": "marked",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "uvicorn", "marked.app:app", "--host", "127.0.0.1", "--port", "8765"],
+      "runtimeArgs": ["run", "uvicorn", "marked.app:app", "--host", "127.0.0.1", "--port", "8765", "--reload", "--reload-dir", "marked"],
       "port": 8765
     }
   ]

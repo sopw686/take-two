@@ -68,8 +68,10 @@ def reanalyze(take_id: str, script_text: str, settings: Settings, label: str | N
         "audio_url": f"/takes/{take_id}/audio.wav",
         "timing": timing or prev.get("timing", {}),
     })
-    from marked.define import check_defines  # local import: optional LLM dependency chain
-    result["defines"] = check_defines(script, transcript, result["lines"])
+    from marked.define import check_defines, define_summary
+    from marked.llm import get_llm
+    result["defines"] = check_defines(script, transcript, get_llm())
+    result["summary"].extend(define_summary(result["defines"]))
     if settings.conventions_enabled:
         from marked.conventions import conventions_report
         result["conventions"] = conventions_report(transcript, result, settings)

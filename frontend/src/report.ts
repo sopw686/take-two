@@ -105,19 +105,13 @@ function defineChip(d: DefineRow): HTMLElement {
   const cls = st === "defined" ? "met" : st === "undefined" || st === "never_spoken" ? "diverged" : "unknown";
   return h("span", { class: `mark define st-${cls} tip`, "data-tip": tip,
     onClick: (e) => { e.stopPropagation(); play(d.evidence?.start ?? d.first_spoken_at ?? null); } },
-    `DEFINE: ${d.term}${d.method === "heuristic" ? " (heuristic)" : ""}`);
+    `DEFINE: ${d.term}${d.method === "heuristic" ? " (heuristic)" : d.method === "llm" ? " (LLM)" : ""}`);
 }
 
 function summaryCard(a: Analysis): HTMLElement {
   const items = a.summary.length ? a.summary : ["Nothing to report: no marks were found in the script."];
-  const defs = a.defines;
-  const extra: string[] = [];
-  for (const d of defs) {
-    if (d.status === "never_spoken") extra.push(`“${d.term}” was never spoken.`);
-    if (d.status === "undefined") extra.push(`“${d.term}” was not defined before its first use.`);
-  }
   return h("section", { class: "summary" },
-    h("ul", {}, ...[...items, ...extra].map((s) => h("li", {}, s))),
+    h("ul", {}, ...items.map((s) => h("li", {}, s))),
     h("p", { class: "muted small" },
       `Your median this take: ${a.baseline.median_wpm?.toFixed(0) ?? "–"} wpm over ${a.baseline.lines_used} lines of ${a.baseline.min_words_per_line}+ words; median pause ${a.baseline.median_pause_s?.toFixed(2) ?? "–"} s. `,
       `Transcribed ${a.stt.local ? "on this computer" : "by a cloud service"} with ${a.stt.model} (${a.stt.device}); pauses measured with ${a.silence_method}. Click any line or mark to hear it.`));
