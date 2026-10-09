@@ -107,3 +107,5 @@ See `DECISIONS.md` for design choices, `TESTING.md` for what is and is not verif
 - The emphasis check is experimental and sensitive to microphone distance.
 - Mobile layouts are not a goal; use a laptop.
 - Improvise's clarity measure is the recognizer's confidence, not phoneme-level pronunciation scoring. Pitch measures need `praat-parselmouth` (installed by default); without it they show as not measurable.
+#   t a k e - t w o  
+ 
