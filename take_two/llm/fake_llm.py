@@ -34,6 +34,8 @@ class FakeLLM:
             return output.model_validate(self._questions(user))  # type: ignore[return-value]
         if output.__name__ == "CoachOutput":
             return output.model_validate(self._coach(user))  # type: ignore[return-value]
+        if output.__name__ == "FollowUpOutput":
+            return output.model_validate(self._followup(user))  # type: ignore[return-value]
         if output.__name__ == "SayingsOutput":
             return output.model_validate(self._sayings(user))  # type: ignore[return-value]
         return None  # define checks fall back to the heuristic
@@ -50,6 +52,16 @@ class FakeLLM:
             {"kind": "contour", "text": words[-1], "contour": "fall", "reason": "(fake) A falling end."},
             {"kind": "pause", "text": " ".join(words[:2]), "pause_s": 0.5, "reason": "(fake) A short pause after the opening words."},
             {"kind": "slow", "text": "words nobody wrote", "reason": "(fake) Not in the line, so code should drop it."},
+        ]}
+
+    @staticmethod
+    def _followup(user: str) -> dict:
+        m = re.search(r'"""\n(.*)\n"""', user, flags=re.S)
+        words = (m.group(1) if m else "").split()[:4]
+        said = " ".join(w.strip(".,;:!?") for w in words)
+        return {"followups": [
+            {"question": f"(fake) You said “{said}”: what do you mean by that?", "builds_on": said},
+            {"question": "(fake) And a second follow-up, which code should drop?", "builds_on": said},
         ]}
 
     @staticmethod

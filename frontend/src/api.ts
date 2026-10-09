@@ -1,4 +1,4 @@
-import type { Analysis, CoachSuggestion, CompareResult, CuePlan, Health, PronounceResponse, ImprovAnalysis, JobStatus, Question, QuestionsResponse, ScriptSettings, Settings, SuggestResponse, TakeSummary, Topic } from "./types";
+import type { Analysis, CoachSuggestion, CompareResult, CuePlan, ExaminerSession, ExaminerSessionTag, FollowupResponse, Health, PronounceResponse, ImprovAnalysis, JobStatus, Question, QuestionsResponse, ScriptSettings, Settings, SuggestResponse, TakeSummary, Topic } from "./types";
 
 /** A failed request. takeId is set when the server kept a take folder that can be retried. */
 export class ApiError extends Error {
@@ -110,10 +110,15 @@ export const api = {
   startTakeJob: (audio: Blob, filename: string, script: string, settings: Settings, label = "") =>
     fetch("/api/jobs/takes", { method: "POST", body: takeForm(audio, filename, { script, label }, settings) }).then((r) => j<JobStatus>(r)),
   startImprovJob: (audio: Blob, filename: string, topic: string, goalS: number | null, content: boolean, settings: Settings, label = "",
-    question: Question | null = null) =>
+    question: Question | null = null, session: ExaminerSessionTag | null = null) =>
     fetch("/api/jobs/improv", { method: "POST", body: takeForm(audio, filename,
       { topic, content: String(content), label, ...(goalS !== null ? { goal_s: String(goalS) } : {}),
-        ...(question ? { question: JSON.stringify(question) } : {}) }, settings) }).then((r) => j<JobStatus>(r)),
+        ...(question ? { question: JSON.stringify(question) } : {}),
+        ...(session ? { session: JSON.stringify(session) } : {}) }, settings) }).then((r) => j<JobStatus>(r)),
+  followup: (takeId: string, script: string) =>
+    post(`/api/improv/${takeId}/followup`, { script }).then((r) => j<FollowupResponse>(r)),
+  examinerSession: (id: string, skipped: number) =>
+    fetch(`/api/improv/session/${encodeURIComponent(id)}?skipped=${skipped}`).then((r) => j<ExaminerSession>(r)),
   improvQuestions: (script: string) => post("/api/improv/questions", { script }).then((r) => j<QuestionsResponse>(r)),
   startDrillJob: (parentId: string, audio: Blob, filename: string, kind: "line" | "section" | "word", index: number, settings: Settings,
     word: number | null = null) =>

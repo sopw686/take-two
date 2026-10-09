@@ -21,6 +21,18 @@ I deliver the speech normally except in two places, so the report has something 
 
 Everything else, including both defined terms and the other two key lines, should come out met.
 
+## Lead with the examiner (30 s, before the speech)
+
+This is the beat that shows why voice: a Q&A is oral, unscripted and timed, and the speaker's hands are on their notes.
+
+- **Before the demo:** Improvise tab → **Spoken examiner**. Type three questions I expect, one per line (or, with an API key, choose *Proposed from my script*); set thinking time to 3 s and silence to 3 s; pick the examiner voice and turn the laptop volume up. Close other tabs that use the microphone.
+- **On stage, 0:00:** "After a talk come the questions. Watch my hands." Click **Start the session**, then put both hands on my printed notes and leave them there.
+- The examiner asks the first question aloud. A tone, a three-second countdown on screen, and recording starts by itself; "Question 1 of 3. Listening." I answer out loud, stop talking, and three seconds later the answer ends by itself and is measured. With a key, the examiner asks one short follow-up built on my own words; without one, it goes straight to the next question.
+- **0:25:** press **Esc** (or let it finish) and point at the closing line on screen: "You answered … The longest hesitation before an answer was … seconds." "No score: it counts what happened. The microphone is never on while the examiner talks, and every answer is a normal take I can open."
+- **If the room is noisy:** the silence never comes, so press **Space** to end each answer.
+
+The speech demo below then starts at 0:30; the times in it are counted from its own start.
+
 ## Live demo (about 3½ minutes)
 
 - **0:00, perform the speech (about 2:10).** I record from the Rehearse tab and read from the teleprompter. The highlight follows my planned timing, not my voice, so if I get ahead or behind I nudge it with the arrow keys or a clicker.

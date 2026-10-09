@@ -78,7 +78,8 @@ def server(tmp_path_factory):
     uv = shutil.which("uv")
     cmd = [uv, "run"] if uv else [sys.executable, "-m"]
     cmd += ["uvicorn", "take_two.app:app", "--host", "127.0.0.1", "--port", str(port)]
-    env = {**os.environ, "TAKE_TWO_TAKES_DIR": str(takes_dir)}
+    # The fake server voice (tones, labelled) lets the examiner speak in a browser that may have no voices.
+    env = {**os.environ, "TAKE_TWO_TAKES_DIR": str(takes_dir), "TAKE_TWO_TTS": "fake"}
     log = open(log_path, "w", encoding="utf-8", errors="replace")
     proc = subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,
                             start_new_session=sys.platform != "win32")
@@ -229,9 +230,8 @@ def test_improvise_record_stop_report(server, browser):
     try:
         page = s.page
         page.goto(f"{server}/#improvise")
-        start = page.locator(".improv-setup .primary.big")
+        start = page.get_by_role("button", name="Start", exact=True)  # not the examiner's "Start the session"
         start.wait_for()
-        assert start.inner_text() == "Start"
         start.click()
         stop = page.get_by_role("button", name="Stop and analyze")
         stop.wait_for(timeout=20_000)   # no thinking time: straight to recording
@@ -246,5 +246,86 @@ def test_improvise_record_stop_report(server, browser):
         assert take["topic"]
         assert 13.0 <= take["duration_s"] <= 18.0, take["duration_s"]
         s.check()
+    finally:
+        s.close()
+
+
+# Every voice played and every microphone opened or closed, with the time, so the order can be checked.
+TRACE_JS = """
+window.__trace = [];
+const mark = (what) => window.__trace.push([what, performance.now()]);
+const play = HTMLMediaElement.prototype.play;
+HTMLMediaElement.prototype.play = function () {
+  if (!this.closest || !this.closest('body')) {  // the voice's own element; the take player is in the page
+    mark('voice-start');
+    this.addEventListener('ended', () => mark('voice-end'), { once: true });
+    this.addEventListener('pause', () => mark('voice-end'), { once: true });
+  }
+  return play.call(this);
+};
+const gum = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+navigator.mediaDevices.getUserMedia = async (c) => {
+  const st = await gum(c);
+  mark('mic-on');
+  st.getTracks().forEach((t) => { const stop = t.stop.bind(t); t.stop = () => { mark('mic-off'); stop(); }; });
+  return st;
+};
+localStorage.setItem('taketwo.voice.examiner', 'server');
+"""
+
+
+def test_spoken_examiner_session(server, browser):
+    """Three typed questions, asked by the fake server voice, answered through the fake microphone.
+    Proves the state transitions, that the microphone is never open while the examiner speaks, that each
+    answer is saved as an Improvise take of the session, and the closing text. It cannot prove how the voice
+    sounds, or that a real loudspeaker would not leak into a real microphone."""
+    questions = ["How do you know the effect is real?", "What would change your mind?", "Who should care about this?"]
+    s = Session(browser, server, {
+        "taketwo.improv": {"source": "examiner", "category": "All", "goal_s": 60, "content": False, "prep_s": 0,
+                           "topic": "", "custom": "", "question": None, "qcustom": ""},
+        "taketwo.examiner": {"source": "typed", "typed": chr(10).join(questions)},
+        "taketwo.settings": {"examiner_questions": 3, "examiner_think_s": 0, "examiner_max_answer_s": 10, "examiner_silence_s": 3},
+    })
+    s.context.add_init_script(TRACE_JS)
+    try:
+        page = s.page
+        page.goto(f"{server}/#improvise")
+        page.get_by_role("button", name="Start the session").click()
+        s.wait_for("document.querySelector('.examiner-phase')?.textContent.startsWith('Question 1 of 3. Listening.')", 30,
+                   "the first answer to be recorded")
+        s.wait_for("/^Session (complete|ended)/.test(document.querySelector('.examiner-phase')?.textContent ?? '')",
+                   3 * ANALYSIS_S, "the session to finish")
+        s.check()
+        say = page.locator(".examiner-phase").inner_text()
+        assert say.startswith("Session complete."), say
+
+        trace = [e[0] for e in page.evaluate("window.__trace")]
+        # Questions, then the closing line: four voices. Three answers: three microphones, each closed again.
+        assert trace.count("mic-on") == 3, trace
+        open_mic = False
+        voice = 0
+        for what in trace:
+            if what == "voice-start":
+                assert not open_mic, f"the examiner spoke while the microphone was open: {trace}"
+                voice += 1
+            elif what == "voice-end":
+                voice = max(0, voice - 1)
+            elif what == "mic-on":
+                assert voice == 0, f"the microphone opened while the examiner was speaking: {trace}"
+                open_mic = True
+            elif what == "mic-off":
+                open_mic = False
+
+        takes = httpx.get(f"{server}/api/takes", timeout=10).json()
+        mine = [httpx.get(f"{server}/api/takes/{t['take_id']}", timeout=10).json() for t in takes if t.get("mode") == "improv"]
+        mine = [a for a in mine if (a.get("session") or {}).get("id", "").startswith("ex-")]
+        assert sorted(a["topic"] for a in mine) == sorted(questions), (
+            say, page.locator(".examiner-answers").inner_text(), [(t.get("mode"), t.get("topic"), t.get("status")) for t in takes])
+        assert len({a["session"]["id"] for a in mine}) == 1
+        assert all(a["duration_s"] <= 11.5 for a in mine), [a["duration_s"] for a in mine]
+        session = httpx.get(f"{server}/api/improv/session/{mine[0]['session']['id']}", timeout=10).json()
+        assert session["closing"].startswith("You answered 3 questions.")
+        assert session["closing"] in say
+        assert page.get_by_role("button", name="Open its report").count() == 3
     finally:
         s.close()

@@ -2,6 +2,7 @@
  *  No script and no marks; the report compares the take with editable reference bands. */
 
 import { runAnalysis, unsavedRecordingNote } from "./analysisRun";
+import { examinerSetup, stopExaminer } from "./examiner";
 import { api } from "./api";
 import { clear, fmtClock, h } from "./dom";
 import { Recorder, showLevel } from "./recorder";
@@ -16,7 +17,7 @@ const PREP = [0, 15, 30];
 interface Prefs {
   category: string; goal_s: number; content: boolean; prep_s: number; topic: string; custom: string;
   /** "questions": answer a likely audience question about the script instead of a topic. */
-  source: "topic" | "questions"; question: Question | null; qcustom: string;
+  source: "topic" | "questions" | "examiner"; question: Question | null; qcustom: string;
 }
 
 function loadPrefs(): Prefs {
@@ -36,6 +37,7 @@ let active: Recorder | null = null;
 let ticker = 0;
 
 export function stopImprovise(): void {
+  stopExaminer();
   clearInterval(ticker);
   active?.cancel();
   active = null;
@@ -362,11 +364,16 @@ export async function renderImprovise(root: HTMLElement, goToReport: () => void)
     ticker = window.setInterval(tick, 200);
   }
 
+  const examinerPanel = examinerSetup(root, goToReport, () => {
+    prefs.source = "questions";
+    savePrefs(prefs);
+    void renderImprovise(root, goToReport);
+  });
   const topicPanel = h("div", { class: "topic-panel" },
     h("div", { class: "topic-head" }, h("h3", {}, "Topic"), h("button", { class: "ghost-btn", type: "button", onClick: shuffle }, "Shuffle")),
     topicText, topicMeta, catChips, customInput);
   const sourceBtns: HTMLButtonElement[] = [];
-  function sourceChip(id: "topic" | "questions", label: string): HTMLButtonElement {
+  function sourceChip(id: Prefs["source"], label: string): HTMLButtonElement {
     const b = h("button", { type: "button", class: "chip", "aria-pressed": String(prefs.source === id), onClick: () => {
       prefs.source = id;
       savePrefs(prefs);
@@ -381,6 +388,8 @@ export async function renderImprovise(root: HTMLElement, goToReport: () => void)
   function showSource(): void {
     topicPanel.hidden = prefs.source !== "topic";
     questionsPanel.hidden = prefs.source !== "questions";
+    examinerPanel.hidden = prefs.source !== "examiner";
+    for (const el of root.querySelectorAll<HTMLElement>(".not-examiner")) el.hidden = prefs.source === "examiner";
     for (const b of sourceBtns) {
       b.classList.toggle("on", b.dataset.source === prefs.source);
       b.setAttribute("aria-pressed", String(b.dataset.source === prefs.source));
@@ -390,16 +399,17 @@ export async function renderImprovise(root: HTMLElement, goToReport: () => void)
   root.append(
     h("div", { class: "improv-setup" },
       h("section", { class: "card topic-card" },
-        h("div", { class: "chips source-chips" }, sourceChip("topic", "A topic"), sourceChip("questions", "Questions about my script")),
-        topicPanel, questionsPanel),
-      h("div", { class: "improv-options" },
+        h("div", { class: "chips source-chips" }, sourceChip("topic", "A topic"), sourceChip("questions", "Questions about my script"),
+          sourceChip("examiner", "Spoken examiner")),
+        topicPanel, questionsPanel, examinerPanel),
+      h("div", { class: "improv-options not-examiner" },
         h("section", { class: "card" }, h("h3", {}, "Time goal"), goalChips,
           h("label", { class: "small muted" }, "Custom ", customGoal)),
         h("section", { class: "card" }, h("h3", {}, "Thinking time"), prepChips,
           h("p", { class: "muted small" }, "A short pause to choose an opening line before the clock starts."))),
-      h("section", { class: "card" }, h("h3", {}, "Coaching"), modes),
-      h("div", { class: "rec-panel" }, startBtn, labelInput, status, runPanel),
-      h("details", { class: "card" }, h("summary", {}, "…or upload a recording of your answer"),
+      h("section", { class: "card not-examiner" }, h("h3", {}, "Coaching"), modes),
+      h("div", { class: "rec-panel not-examiner" }, startBtn, labelInput, status, runPanel),
+      h("details", { class: "card not-examiner" }, h("summary", {}, "…or upload a recording of your answer"),
         h("p", { class: "muted small" }, "Any audio file works (webm, wav, m4a, mp3)."), fileInput),
       h("p", { class: "muted small" }, "What gets measured: time against your goal, pace, filler words, long pauses and restarts, hedges (“I think”, “kind of”), "
         + "statements that end rising or fading, words that were hard to catch, and vocal variety (pitch range, loudness, pace changes, pauses between sentences, opening energy). "

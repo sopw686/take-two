@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
@@ -64,6 +65,32 @@ async def questions(body: QuestionsBody) -> dict:
     return {"available": True, "questions": kept, "dropped": dropped, "proposed": len(out.questions)}
 
 
+class FollowupBody(BaseModel):
+    script: str = ""  # only to check quotes; the model never sees it
+
+
+@router.post("/{take_id}/followup")
+async def followup(take_id: str, body: FollowupBody | None = None) -> dict:
+    """The spoken examiner's one follow-up to this answer (model reads the transcript text and numbers only)."""
+    from take_two.examiner import ask_followup
+    from take_two.llm import get_llm
+    _improv_take(take_id)
+    return await run_in_threadpool(ask_followup, take_id, get_llm(), (body.script if body else "") or "")
+
+
+@router.get("/session/{session_id}")
+async def session(session_id: str, skipped: int = 0) -> dict:
+    """A spoken-examiner session: its answers and the closing line, written by code from the measurements."""
+    from take_two.examiner import closing_line, session_answers
+    if not re.fullmatch(r"[A-Za-z0-9-]{1,40}", session_id):
+        raise HTTPException(400, "bad session id")
+    answers = await run_in_threadpool(session_answers, session_id)
+    rows = [{"take_id": a["take_id"], "label": a.get("label", ""), "question": a.get("topic", ""),
+             "followup_of": (a.get("session") or {}).get("followup_of"),
+             "pace_status": ((a.get("improv") or {}).get("pace") or {}).get("status")} for a in answers]
+    return {"answers": rows, "closing": closing_line(answers, max(0, min(skipped, 6)))}
+
+
 @router.get("/topics")
 async def topics() -> dict:
     from take_two.topics import CATEGORIES, TOPICS
@@ -107,19 +134,38 @@ def parse_question(raw: str | None, topic: str) -> dict | None:
     return {"text": topic, "tag": tag, "line_index": line, "line_text": line_text}
 
 
+def parse_session(raw: str | None) -> dict | None:
+    """{id, index, total, followup_of}: which spoken-examiner session an answer belongs to. A session is a
+    group of ordinary Improvise takes; this is its only trace, in the take's improv.json."""
+    if not raw:
+        return None
+    try:
+        s = json.loads(raw)
+    except ValueError:
+        raise HTTPException(400, "bad session")
+    if not isinstance(s, dict) or not isinstance(s.get("id"), str) or not re.fullmatch(r"[A-Za-z0-9-]{1,40}", s["id"]):
+        raise HTTPException(400, "bad session")
+    num = lambda k, lo, hi: s.get(k) if isinstance(s.get(k), int) and not isinstance(s.get(k), bool) and lo <= s[k] <= hi else None  # noqa: E731
+    fu = s.get("followup_of")
+    return {"id": s["id"], "index": num("index", 0, 5), "total": num("total", 3, 6),
+            "followup_of": fu if isinstance(fu, str) and takes.TAKE_ID_RE.fullmatch(fu) else None}
+
+
 async def new_improv_take(audio: UploadFile, topic: str, goal_s: float | None, content: bool, settings: str | None,
-                          label: str, question: str | None = None) -> tuple[str, Settings]:
+                          label: str, question: str | None = None, session: str | None = None) -> tuple[str, Settings]:
     """Validate an Improvise take and create its folder (upload, topic, settings) before any processing."""
     st = _settings(settings)
     topic = clean_topic(topic)
     check_goal(goal_s)
     q = parse_question(question, topic)
+    sess = parse_session(session)
     data = await audio.read()
     if not data:
         raise HTTPException(400, "the recording is empty")
     take_id = takes.new_take("improv", upload=data, original_name=audio.filename or "take.webm",
                              settings=st.model_dump(), label=label,
-                             improv={"topic": topic, "goal_s": goal_s, "content": content, "question": q})
+                             improv={"topic": topic, "goal_s": goal_s, "content": content, "question": q,
+                                     **({"session": sess} if sess else {})})
     return take_id, st
 
 

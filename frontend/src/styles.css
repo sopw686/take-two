@@ -452,3 +452,12 @@ button.mark.pause { font-size: 14px; }
 .words-list li, .clarity-list li { margin: 6px 0; }
 .drill-hear summary { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .hear-seg { transition: none; } }
+
+/* Spoken examiner */
+kbd { font-family: var(--sans); font-size: 12px; padding: 0 5px; border: 1px solid var(--rule-strong); border-bottom-width: 2px; border-radius: 4px; background: var(--paper); }
+.examiner-live .examiner-question { font-size: 22px; margin: 8px 0; }
+.examiner-live.listening { border-color: var(--accent); }
+.examiner-phase { font-weight: 600; }
+.examiner-answers { margin-top: 12px; }
+.examiner-answer { border-top: 1px solid var(--rule); padding: 8px 0; }
+.examiner-setup textarea { margin: 6px 0 10px; font-family: var(--serif); }

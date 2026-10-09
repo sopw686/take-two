@@ -9,7 +9,7 @@ You mark up the script the way a performer marks a poem (slow down here, pause h
 - **Measured, not judged:** every mark comes back as met, close to, or diverged from *your* mark, with the number behind it and the moment a click away.
 - **Local-first:** speech-to-text (faster-whisper) and pause detection (Silero VAD) run on your machine. Audio leaves it only if you add a cloud key, and the UI says so.
 - **Optional LLM features** (Claude): suggest marks, check whether a `[DEFINE]` term was explained, coaching notes. The model sees text and numbers, never audio, and code verifies its output (e.g. quotes not found in the transcript are dropped).
-- **Stack:** Python / FastAPI backend, TypeScript / Vite frontend. 295 unit tests, a synthetic recording with known ground truth, and a browser test that records through Chrome's fake microphone.
+- **Stack:** Python / FastAPI backend, TypeScript / Vite frontend. 345 Python unit tests and 18 frontend tests, a synthetic recording with known ground truth, and browser tests that record through Chrome's fake microphone, including a full spoken-examiner session.
 
 ## Quick start
 
@@ -69,7 +69,7 @@ All thresholds are yours to change in **Settings**. Wording in the report is "me
 <!-- take-two: short_pause_s=0.9 key_slower_pct=15 conventions_enabled=true -->
 ```
 
-sets those thresholds for every take of that script, over the Settings dialog, so a script shared with a colleague or recorded on another machine is measured the same way. The names are the Settings field names (`short_pause_s`, `long_pause_s`, `pause_near_ratio`, `key_slower_pct`, `key_pause_after_s`, `section_tolerance_pct`, `line_min_coverage`, `baseline_min_words`, `min_silence_s`, `fuzzy_match_ratio`, `fuzzy_min_chars`, `paraphrase_min_words_pct`, `conventions_enabled`, `conventions_wpm_min`, `conventions_wpm_max`, `conventions_filler_per_100`, `emphasis_enabled`, `hear_baseline_wpm`, `hear_register`, `coach_slow_pct`, `coach_pause_s`, `clarity_prob`, `clarity_context_words`, and the `improv_…` bands). Only the first non-blank line counts; it is a comment, so it moves no line numbers. The editor says what the line sets (or what is wrong with it) as you type, the Settings dialog marks those fields, and the report lists the values that came from the script. A take with an invalid line is refused before anything is saved.
+sets those thresholds for every take of that script, over the Settings dialog, so a script shared with a colleague or recorded on another machine is measured the same way. The names are the Settings field names (`short_pause_s`, `long_pause_s`, `pause_near_ratio`, `key_slower_pct`, `key_pause_after_s`, `section_tolerance_pct`, `line_min_coverage`, `baseline_min_words`, `min_silence_s`, `fuzzy_match_ratio`, `fuzzy_min_chars`, `paraphrase_min_words_pct`, `conventions_enabled`, `conventions_wpm_min`, `conventions_wpm_max`, `conventions_filler_per_100`, `emphasis_enabled`, `hear_baseline_wpm`, `hear_register`, `coach_slow_pct`, `coach_pause_s`, `clarity_prob`, `clarity_context_words`, the `examiner_…` settings, and the `improv_…` bands). Only the first non-blank line counts; it is a comment, so it moves no line numbers. The editor says what the line sets (or what is wrong with it) as you type, the Settings dialog marks those fields, and the report lists the values that came from the script. A take with an invalid line is refused before anything is saved.
 
 **Import from PowerPoint notes** (Script tab): each slide becomes a `## Slide N: title` section and its speaker notes become the lines, ready for budgets and marks. A slide without notes stays as an empty section, shown as "no script lines" in the report. The file is read by this app on your machine and not kept.
 
@@ -137,6 +137,18 @@ Every measure is compared with a **reference band you can edit** in Settings →
 **Questions about my script (Q&A practice).** Instead of a topic, practise the questions that follow a talk, a defense, a pitch or an interview: with an API key, the model reads the script on your Script tab and proposes five to eight likely audience questions, each tagged (clarification, methods challenge, limitation, implication) and tied to a script line; code drops any it cannot check. Or type a question you expect (no key needed). Your answer is an Improvise take on that question, and the content review adds "Answered the question", backed by a quote from your answer.
 
 Before recording, choose **Delivery only** (fully local) or **Delivery + content**. With an API key, content mode also asks the model to review the hook, staying on topic, suspense and the ending from the transcript text; every judgement must quote your words, and code drops any quote it cannot find. The model also proposes one more gripping opening line. Improvise takes appear in Takes with a badge, and the report shows your recent Improvise numbers side by side.
+
+## Spoken examiner
+
+A hands-free Q&A for a defense, a pitch or an interview, where the answers are oral, unscripted and timed, and your hands and eyes are on your notes. Improvise tab → **Spoken examiner**:
+
+1. **Set up** (keyboard is fine here): the questions (proposed from your script with an API key, your own typed one per line, or a mix), how many (3–6), thinking time, the longest answer, and how much silence ends an answer (about 3 s by default). Pick the examiner's voice; it is separate from the coach's.
+2. **Run**: the examiner asks each question aloud. When it has finished speaking, a short tone plays, the thinking time counts down on screen, and recording starts on its own. **The microphone is never open while the examiner speaks.** Your answer ends when you have been silent longer than your threshold after speaking, at the maximum length, or when you press **Space**.
+3. Each answer is analyzed as an ordinary **Improvise take whose topic is the question**, with every Improvise measure, and is listed in Takes, ready to compare, drill or export.
+4. **One follow-up per question**, with an API key: the model reads only that answer's transcript and its measured numbers (never audio) and asks one short question you can answer from what you just said ("You said the effect doubled: compared with what?"). Code drops it if it is more than one question, is not grounded in words you said, or quotes words you did not say. Without a key there are no follow-ups; the examiner moves on and says so.
+5. **Close**: the examiner reads a line the app writes from your numbers, for example "You answered 4 questions. 2 stayed within your pace band, 2 were close to it. The longest hesitation before an answer was 6 seconds." The same text is on screen with a link to each answer's report. No score, no grade.
+
+Keys at any time: **Space** finish the answer, **R** hear the question again, **S** skip, **Esc** end the session. Answers already recorded are kept if you stop, and an answer whose analysis fails keeps its recording and a Retry. Without speech voices or microphone permission the page says which is missing and points you to **Questions about my script**, where the same questions can be read and answered or uploaded.
 
 ## Optional keys
 

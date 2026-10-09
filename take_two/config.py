@@ -85,6 +85,11 @@ class Settings(BaseModel):
     # each side also matched exactly with high confidence (0 turns the skip off).
     clarity_prob: float = Field(0.5, ge=0.05, le=0.95)
     clarity_context_words: int = Field(2, ge=0, le=5)
+    # Spoken examiner: questions asked aloud, answers recorded hands-free.
+    examiner_questions: int = Field(4, ge=3, le=6)
+    examiner_think_s: float = Field(10.0, ge=0.0, le=60.0)
+    examiner_max_answer_s: float = Field(90.0, ge=10.0, le=600.0)
+    examiner_silence_s: float = Field(3.0, ge=1.0, le=10.0)
 
     @model_validator(mode="after")
     def _band_order(self) -> "Settings":

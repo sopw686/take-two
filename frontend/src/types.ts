@@ -37,6 +37,10 @@ export interface Settings {
   coach_pause_s: number;
   clarity_prob: number;
   clarity_context_words: number;
+  examiner_questions: number;
+  examiner_think_s: number;
+  examiner_max_answer_s: number;
+  examiner_silence_s: number;
 }
 
 export interface Health {
@@ -408,3 +412,8 @@ export interface JobStatus {
 }
 
 export interface ScriptSettings { from_script: Partial<Settings>; error: string | null }
+
+/** Which spoken-examiner session an answer belongs to (stored in the take's improv.json). */
+export interface ExaminerSessionTag { id: string; index: number; total: number; followup_of: string | null }
+export interface FollowupResponse { available: boolean; followup: { text: string; builds_on: string; provider?: string } | null; reason: string | null; dropped?: { reason: string; count: number }[] }
+export interface ExaminerSession { answers: { take_id: string; label: string; question: string; followup_of: string | null; pace_status: string | null }[]; closing: string }
