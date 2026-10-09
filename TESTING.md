@@ -36,12 +36,15 @@ uv run pytest -m slow    # the synthetic fixture through real local speech-to-te
 
 Regenerate the fixture with `uv run python tests/fixtures/make_fixture.py` (needs a system TTS voice; the committed WAV means tests do not).
 
+**Improvise** (`tests/test_improv.py`, hand-built transcripts and synthetic harmonic tones): "kind of" counted as a hedge and not a filler, noun use ("a kind of tree") ignored; hedges map to word indexes and times; restarts ("I I", "the the", "th-") detected and "very very" ignored; a long silence mid-sentence is a hesitation while the same silence after a full stop is a deliberate pause; sentence splitting; time goal met / under with the 5 s floor; overall and windowed pace, band editable; clarity flags only low-confidence non-filler words and is "not measurable" without word confidence; uptalk detected on rising statement endings and not on falling ones; monotone vs. varied pitch range; trailing off from final-word loudness; opening energy; summary has no grading words; drills cite numbers and cap at three; delivery coaching drops number-less suggestions and caps at three; content review drops unverifiable quotes and caps the suggested opening at 30 words; coaching sends numbers and history, and the transcript only when content review is on. Routes through FastAPI's test client with a stub transcriber: topics list, creating a take (filler prompt sent, word confidence kept), script routes refuse Improvise takes, Improvise re-analysis honours new bands, validation of topic and goal.
+
 ## Checked manually only
 
 - Recording in the browser with a real microphone, the elapsed clock, the planned-section indicator, the loudness meter, calibration, and the opt-in live pace. The automated browser used for verification has no microphone; the "microphone unavailable" path was exercised and shows the upload alternative.
 - Uploading a file through the page (verified by posting the fixture through the page's own `FormData` path), the report rendering, tooltips, section bars, click-to-play seeking to a line's start, Takes list and comparison card, Settings changes triggering re-analysis.
 - The suggestion review UI (ghost marks, reasons, accept/reject/accept-all, apply) was exercised with `MARKED_LLM=fake`, a labelled development stand-in. A real Anthropic call has **not** been exercised (no key on the build machine); the request shape follows the SDK's structured-output API and the response is validated by the same code the tests cover.
 - The OpenAI Whisper API adapter is implemented but untested (no key).
+- Improvise in the browser: setup (shuffle, category filter, custom topic, goal chips, coaching choice), the prep countdown and cancel, the report from the fixture posted to `/api/improv` (cards, annotated transcript, pitch strip, drills, trend table), Settings changes re-analysing an Improvise take, and the content review with `MARKED_LLM=fake` (including an invented quote being dropped). Recording with a real microphone, the countdown during speech, overtime colouring and the 2× safety stop are not exercised automatically (no microphone).
 
 ## Known weak spots
 
@@ -52,4 +55,6 @@ Regenerate the fixture with `uv run python tests/fixtures/make_fixture.py` (need
 - **Emphasis** is experimental: loudness depends on microphone distance and head movement; pitch estimation fails on breathy or very low voices.
 - **Heuristic `[DEFINE]`** can be fooled by cue words used for something else ("that is" as a plain phrase) and misses definitions by example that use none of the cue phrases.
 - **Suggestions** are only as good as the model; caps limit over-marking but cannot make a weak reason good. The reasons are shown precisely so the user can judge them.
+- **Improvise bands are conventions, not truths.** Defaults (pace 130–170 wpm, ≤ 2 fillers per 100 words, ≥ 5 semitones of pitch range, …) are starting points; uptalk and trailing-off depend on Whisper's sentence punctuation and on clean word timestamps.
+- **Improvise clarity** is Whisper's word confidence: it also drops for rare names and technical terms said perfectly well.
 - **Section tolerance floor** of 3 s means very short sections are rarely reported over or under.

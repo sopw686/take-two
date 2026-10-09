@@ -61,3 +61,25 @@ Each entry: what was decided, what else was considered, why.
 **Emphasis uses Praat (parselmouth) when installed, else librosa's pyin, else loudness only.** All three are optional so a minimal install still runs; the status is labelled experimental in the UI and the thresholds (+3 dB or +10 % pitch over the line's median) are deliberately coarse.
 
 **Conventions preset nudges Whisper with a filler-laden prompt only when the preset is on.** Whisper suppresses "um"/"uh" by default; an `initial_prompt` containing fillers makes it transcribe them more often. Doing that always would change transcripts for users who never asked for filler counts.
+
+## Improvise
+
+**Improvise is a deliberate exception to "no universal defaults", handled as bands, not scores.** Without a script there are no marks to compare against, so each measure gets a reference band (pace 130–170 wpm, ≤ 2 fillers per 100 words, ≥ 5 semitones of pitch range, …) that lives in Settings next to everything else and travels with the request. Statuses read "within / close to / outside your band"; there is no overall confidence or engagement score, because a single number hides which thing to practise.
+
+**Clarity is a proxy, not pronunciation scoring.** Real pronunciation assessment needs a phoneme-level reference model (for example a cloud pronunciation API), which would send audio off the machine. Whisper already returns a per-word confidence; words below a threshold are shown as "hard to catch", labelled as a proxy for mumbling or swallowed endings. A cloud phoneme scorer can be added later behind the same banner as cloud transcription.
+
+**Pitch comes from Praat (parselmouth), now a runtime dependency.** Uptalk, monotone and opening energy are central to Improvise rather than an experimental extra, so `praat-parselmouth` moved from the `emphasis` extra into the main dependencies. librosa's pyin and "not measurable" remain as fallbacks. Uptalk is the last 40 % of a statement-final word's voiced frames against its first 60 %, in semitones; sentences ending in "?" are excluded. Monotone is the 10th–90th percentile pitch spread over the take.
+
+**Hesitation vs. deliberate pauses depends on where the silence falls.** A VAD silence after a word ending in `. ? !` and under 3 s is a deliberate pause between sentences, which the engagement card counts in your favour; the same silence mid-sentence, or over 3 s between sentences, is a hesitation. This uses Whisper's punctuation, which is imperfect, but the alternative (no distinction) would penalise the pauses Marked encourages elsewhere.
+
+**"kind of" and "sort of" are hedges in Improvise, fillers in the conventions preset.** Counting them twice would inflate both; Improvise skips them as fillers and drops noun uses ("a kind of tree").
+
+**Whisper is always nudged to keep fillers in Improvise.** Fillers are the point of the mode, so the filler-laden `initial_prompt` is always sent, unlike script takes where it is tied to the conventions preset.
+
+**Drills are written by code, coaching by the model.** Up to three drills are generated from the measures furthest outside their bands, each citing the number, so the mode coaches without a key. The model's delivery coaching follows the same rules as script coaching (numbers only, cite one per suggestion, cap three) with its own prompt, which is allowed to talk about fillers and energy because the user chose this mode for that.
+
+**Content review is opt-in per take and quote-verified.** The model reads the transcript text (never audio) and judges hook, topic, suspense and ending, each with a verbatim quote; code finds the quote and attaches timestamps or drops the item, as with `[DEFINE]`. The suggested opening line is capped at 30 words in code.
+
+**Audio examples of engaging delivery are deferred.** Showing what a hook or a suspense pause sounds like needs recorded or generated examples; the drills describe the technique in words for now.
+
+**Improvise takes share the take folder format** with an extra `improv.json` (topic, goal, content choice) and `mode: "improv"` in the analysis. Script-only routes (re-analysis with a script, coaching, comparison) refuse them with a 400; `/api/improv` has its own re-analysis and coaching.

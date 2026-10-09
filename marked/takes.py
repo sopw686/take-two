@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import secrets
 from datetime import datetime
 from pathlib import Path
@@ -19,8 +20,12 @@ def new_take_id() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(2)
 
 
+TAKE_ID_RE = re.compile(r"\d{8}-\d{6}-[0-9a-f]{4}")
+
+
 def take_path(take_id: str) -> Path:
-    if not take_id or "/" in take_id or "\\" in take_id or ".." in take_id:
+    # Whitelist the generated format: a blacklist misses Windows drive-relative ids like "C:" or "D:x".
+    if not take_id or not TAKE_ID_RE.fullmatch(take_id):
         raise ValueError("bad take id")
     return takes_dir() / take_id
 
@@ -50,8 +55,32 @@ def list_takes() -> list[dict]:
             "summary": data.get("summary", []),
             "label": data.get("label", ""),
             "stt": data.get("stt", {}),
+            "mode": data.get("mode", "script"),
+            "topic": data.get("topic"),
         })
     return out
+
+
+def improv_history(take_id: str, n: int = 5, before: str | None = None) -> list[dict]:
+    """Headline numbers of up to n Improvise takes recorded before this one, oldest first."""
+    before = before or (load_take(take_id) or {}).get("created_at") or "~"
+    rows: list[dict] = []
+    for t in list_takes():
+        if t.get("mode") != "improv" or t["take_id"] == take_id or (t.get("created_at") or "") > before:
+            continue
+        r = (load_take(t["take_id"]) or {}).get("improv")
+        if not r:
+            continue
+        rows.append({
+            "take_id": t["take_id"], "created_at": t.get("created_at"), "topic": t.get("topic"),
+            "goal_s": r["goal"].get("goal_s"), "delta_s": r["goal"].get("delta_s"),
+            "wpm": r["pace"].get("overall_wpm"), "fillers_per_100": r["fillers"].get("per_100"),
+            "hedges_per_100": r["hedges"].get("per_100"), "hesitations_per_min": r["hesitation"].get("per_min"),
+            "pitch_range_st": r["engagement"].get("pitch_range_st"),
+        })
+        if len(rows) >= n:
+            break
+    return list(reversed(rows))
 
 
 def load_take(take_id: str) -> dict | None:

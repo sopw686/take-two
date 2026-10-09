@@ -95,3 +95,22 @@ def test_llm_failure_never_breaks_the_report():
     llm = FakeLLM(None)
     rows = check_defines(script, tr, llm)
     assert rows[0]["method"] == "heuristic" and rows[0]["status"] == "defined"
+
+
+def test_llm_quote_far_after_first_use_falls_back_to_heuristic():
+    script = parse_script("[DEFINE: entropy] text")
+    filler = " ".join(["word"] * 40)
+    tr = make_transcript(f"entropy went up {filler} a measure of disorder")
+    llm = FakeLLM(DefineJudgements(judgements=[DefineJudgement(
+        term="entropy", spoken=True, defined_at_or_before_first_use=True, evidence_quote="a measure of disorder")]))
+    rows = check_defines(script, tr, llm)
+    assert rows[0]["method"] == "heuristic" and rows[0]["status"] == "undefined"
+
+
+def test_llm_spoken_flag_does_not_override_measured_occurrence():
+    script = parse_script("[DEFINE: entropy] text")
+    tr = make_transcript("entropy went up and that was it")
+    llm = FakeLLM(DefineJudgements(judgements=[DefineJudgement(
+        term="entropy", spoken=False, defined_at_or_before_first_use=False)]))
+    rows = check_defines(script, tr, llm)
+    assert rows[0]["status"] == "undefined" and rows[0]["first_spoken_at"] is not None

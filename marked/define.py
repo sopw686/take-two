@@ -147,7 +147,7 @@ SYSTEM = (
 def llm_check(terms: list[str], transcript: Transcript, flat: _Flat, llm) -> dict[str, dict]:
     user = ("Transcript:\n\"\"\"\n" + transcript.text + "\n\"\"\"\n\nTerms: " + "; ".join(terms) +
             "\n\nReturn one judgement per term, in the same order.")
-    out = llm.complete_structured(SYSTEM, user, DefineJudgements, max_tokens=2000)
+    out = llm.complete_structured(SYSTEM, user, DefineJudgements, max_tokens=16000)
     results: dict[str, dict] = {}
     if out is None:
         return results
@@ -155,17 +155,18 @@ def llm_check(terms: list[str], transcript: Transcript, flat: _Flat, llm) -> dic
         term = j.term.strip()
         needle = normalize_word(term)
         occ = _find_seq(flat.norm, needle, loose=True) if needle else -1
-        if occ < 0 or not j.spoken:
+        if occ < 0:
+            # Code decides whether the term was spoken; the model's `spoken` flag is not trusted over the timestamps.
             results[term.lower()] = {"status": "never_spoken", "defined": None, "first_spoken_at": None,
                                      "evidence": None, "method": "llm", "note": j.explanation or "Never spoken."}
             continue
         first_at = round(flat.time(occ)[0], 3)
         ev = None
         if j.evidence_quote.strip():
-            qn = normalize_word(j.evidence_quote) if " " not in j.evidence_quote.strip() else \
-                [n for w in j.evidence_quote.split() for n in normalize_word(w)]
+            qn = normalize_word(j.evidence_quote)
             pos = _find_seq(flat.norm, qn) if qn else -1
-            if pos >= 0:
+            # The quote must start at or near first use; a later explanation does not count.
+            if 0 <= pos <= occ + len(needle) + AFTER_WINDOW:
                 ev = flat.quote(pos, pos + len(qn))
         if j.defined_at_or_before_first_use and ev is None:
             # The model claimed a definition but we cannot find its quote: do not trust it.
@@ -198,7 +199,7 @@ def check_defines(script: Script, transcript: Transcript, llm=None) -> list[dict
         if res is None or res.get("_fallback"):
             h = heuristic_check(d.term, flat)
             if res is not None:
-                h["note"] = "The model's quote could not be found in the transcript; showing the heuristic result instead. " + h.get("note", "")
+                h["note"] = "The model's quote could not be found at or near the first use; showing the heuristic result instead. " + h.get("note", "")
             rows.append({**base, **h})
         else:
             rows.append({**base, **res})

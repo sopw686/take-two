@@ -74,3 +74,9 @@ def test_raw_line_numbers_survive_multiline_comments():
     assert [ln.raw_line_no for ln in s.lines] == [4, 6]
     assert s.sections[0].raw_line_no == 3
     assert text.splitlines()[4] == "First line."
+
+
+def test_emphasis_with_trailing_punctuation():
+    s = parse_script("Hello *world*, again.")
+    assert s.lines[0].emphasis == [1]
+    assert s.lines[0].text == "Hello world, again."

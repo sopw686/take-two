@@ -50,6 +50,23 @@ All thresholds are yours to change in **Settings**. Wording in the report is "me
 - Optional, only when switched on in Settings: a "conference conventions" preset (overall pace band, filler words per 100) and an experimental emphasis check for `*word*`.
 - With an API key: "Suggestions based on your measurements", at most three, each citing a measured number and the mark it concerns.
 
+## Improvise
+
+A second mode with no script and no marks: pick a topic (shuffle a built-in list by category, or type your own), a time goal (30 s to 5 min, or custom), and optional thinking time. Speak; a countdown shows the time left and turns to overtime. The report covers what a listener picks up on:
+
+| Group | What is measured |
+|---|---|
+| Time | Spoken time vs. your goal |
+| Pace | Words per minute, overall and per 15-second stretch |
+| Fillers and hesitation | um / uh / "you know" / "like,"; silences of 1.2 s+ inside a sentence; restarts ("I I", cut-off words) |
+| Confidence | Hedges ("I think", "maybe", "kind of"); statements whose last word rises in pitch (uptalk); sentences that fade on the last word |
+| Clarity (proxy) | Words the recognizer was unsure of; a sign of mumbling or swallowed endings, not a pronunciation score |
+| Engagement | Pitch range (monotone vs. varied), loudness variation, pace variation, deliberate pauses between sentences, opening energy |
+
+Every measure is compared with a **reference band you can edit** in Settings → *Improvise reference bands*; there is no overall score. The transcript is shown with fillers, hedges, restarts, unclear words, hesitations, and rising or fading endings marked in place; click any word to hear it. Up to three practice drills are written by the app from your numbers, with no model involved.
+
+Before recording, choose **Delivery only** (fully local) or **Delivery + content**. With an API key, content mode also asks the model to review the hook, staying on topic, suspense and the ending from the transcript text; every judgement must quote your words, and code drops any quote it cannot find. The model also proposes one more gripping opening line. Improvise takes appear in Takes with a badge, and the report shows your recent Improvise numbers side by side.
+
 ## Tests
 
 ```bash
@@ -62,14 +79,14 @@ See `TESTING.md` for what is covered, what was checked by hand, and known weak s
 ## Layout
 
 ```
-marked/           FastAPI backend: parser, STT adapters, VAD, alignment, analysis, LLM features
+marked/           FastAPI backend: parser, STT adapters, VAD, alignment, analysis, LLM features, Improvise (improv*.py, prosody.py, topics.py)
 frontend/         Vite + TypeScript UI, built into frontend/dist and served by the backend
 tests/            unit tests + a synthetic TTS fixture with known ground truth (uv run pytest; -m slow for STT)
 takes/            your recordings and analyses, one folder per take (not committed)
 sample_script.md  a placeholder talk to try the marks on
 ```
 
-See `DECISIONS.md` for design choices, `TESTING.md` for what is and is not verified, `DEMO.md` for a demo walkthrough, and `PITCH.md` for the pitch outline.
+See `DECISIONS.md` for design choices, `TESTING.md` for what is and is not verified, `DEMO.md` for a demo walkthrough (with `demo_speech.md`, a marked talk about Marked), `PITCH.md` for the pitch outline, and `WRITEUP.md` for the one-page submission write-up.
 
 ## Known limitations
 
@@ -78,3 +95,4 @@ See `DECISIONS.md` for design choices, `TESTING.md` for what is and is not verif
 - Whisper usually drops "um" and "uh"; the opt-in filler count is a lower bound.
 - The emphasis check is experimental and sensitive to microphone distance.
 - Mobile layouts are not a goal; use a laptop.
+- Improvise's clarity measure is the recognizer's confidence, not phoneme-level pronunciation scoring. Pitch measures need `praat-parselmouth` (installed by default); without it they show as not measurable.

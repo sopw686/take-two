@@ -68,6 +68,7 @@ class FasterWhisperTranscriber:
         self.vad_filter = vad_filter
         self._model = None
         self._lock = threading.Lock()
+        self._load_lock = threading.Lock()  # startup warm-up and the first take can race to load
 
     def _resolve(self) -> None:
         dev = self.requested_device
@@ -79,24 +80,28 @@ class FasterWhisperTranscriber:
     def load(self) -> None:
         if self._model is not None:
             return
-        _add_cuda_dll_dirs()
-        from faster_whisper import WhisperModel
+        with self._load_lock:
+            if self._model is not None:
+                return
+            _add_cuda_dll_dirs()
+            from faster_whisper import WhisperModel
 
-        self._resolve()
-        try:
-            self._model = WhisperModel(self.model_name, device=self.device, compute_type=self.compute_type)
-            if self.device == "cuda":
-                # Force the lazy cuBLAS load now so a broken CUDA setup fails here, not mid-request.
-                segs, _ = self._model.transcribe(np.zeros(16000, dtype=np.float32), language="en", beam_size=1,
-                                                 vad_filter=False)
-                list(segs)
-        except Exception as exc:  # GPU init failure: fall back to CPU rather than refuse to run
-            if self.device != "cpu":
-                log.warning("CUDA unavailable for faster-whisper (%s); falling back to CPU int8", exc)
-                self.device, self.compute_type = "cpu", "int8"
-                self._model = WhisperModel(self.model_name, device="cpu", compute_type="int8")
-            else:
-                raise
+            self._resolve()
+            try:
+                model = WhisperModel(self.model_name, device=self.device, compute_type=self.compute_type)
+                if self.device == "cuda":
+                    # Force the lazy cuBLAS load now so a broken CUDA setup fails here, not mid-request.
+                    segs, _ = model.transcribe(np.zeros(16000, dtype=np.float32), language="en", beam_size=1,
+                                               vad_filter=False)
+                    list(segs)
+            except Exception as exc:  # GPU init failure: fall back to CPU rather than refuse to run
+                if self.device != "cpu":
+                    log.warning("CUDA unavailable for faster-whisper (%s); falling back to CPU int8", exc)
+                    self.device, self.compute_type = "cpu", "int8"
+                    model = WhisperModel(self.model_name, device="cpu", compute_type="int8")
+                else:
+                    raise
+            self._model = model
 
     def describe(self) -> dict:
         return {"backend": self.name, "model": self.model_name, "device": self.device,

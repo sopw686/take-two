@@ -131,3 +131,9 @@ def test_prompt_mentions_goal_and_existing_sections():
     p = build_user_prompt(script, "somber", "I want the ending to land.", 120)
     assert "somber" in p and "Do not propose sections" in p and "Target length: 2:00" in p and "ending to land" in p
     assert "0: Coral reefs" in p
+
+
+def test_term_with_symbol_words_does_not_crash():
+    from marked.suggest import _term_in_text
+    assert _term_in_text("p < 0.05", "we found p < 0.05 here")
+    assert not _term_in_text("p < 0.05", "we found nothing here")

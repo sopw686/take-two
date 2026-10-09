@@ -31,4 +31,4 @@ def set_llm(llm: LLM | None) -> None:
 def llm_status() -> dict:
     llm = get_llm()
     return {"available": llm.available, "provider": llm.name, "model": getattr(llm, "model", None),
-            "reason": None if llm.available else "No ANTHROPIC_API_KEY set. Set it and restart to enable Suggest marks and LLM-checked definitions."}
+            "reason": None if llm.available else "No ANTHROPIC_API_KEY set. Set it and restart to enable Suggest marks, coaching, Improvise content review and LLM-checked definitions."}

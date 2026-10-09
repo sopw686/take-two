@@ -87,8 +87,8 @@ def build_user_prompt(script: Script, goal: str, notes: str, target_seconds: int
 
 
 def _term_in_text(term: str, text: str) -> bool:
-    t = " ".join(normalize_word(w) and " ".join(normalize_word(w)) for w in term.split()).strip()
-    hay = " ".join(" ".join(normalize_word(w)) for w in text.split())
+    t = " ".join(n for w in term.split() for n in normalize_word(w))
+    hay = " ".join(n for w in text.split() for n in normalize_word(w))
     return bool(t) and f" {t} " in f" {hay} "
 
 

@@ -1,0 +1,61 @@
+"""Built-in Improvise topics. Plain data; the user can always type their own."""
+
+from __future__ import annotations
+
+CATEGORIES = ["Everyday", "Nature", "Opinions", "Stories", "Tech & science", "Games & fun"]
+
+# (topic, category, level) — level is easy / medium / hard by how much you must structure an argument.
+_TOPICS: list[tuple[str, str, str]] = [
+    ("Your morning routine, and one thing you'd change about it", "Everyday", "easy"),
+    ("The best meal you've ever eaten", "Everyday", "easy"),
+    ("Why everyone should learn to cook one dish really well", "Everyday", "medium"),
+    ("A small habit that made a big difference for you", "Everyday", "easy"),
+    ("The most useful thing in your bag right now", "Everyday", "easy"),
+    ("How to make a good first impression", "Everyday", "medium"),
+    ("What your street will look like in 20 years", "Everyday", "medium"),
+    ("Explain your job or studies to a ten-year-old", "Everyday", "medium"),
+    ("Trees", "Nature", "easy"),
+    ("Why the ocean is still mostly unexplored", "Nature", "medium"),
+    ("The smartest animal you know of", "Nature", "easy"),
+    ("What a city would lose if every bird disappeared", "Nature", "hard"),
+    ("Your favourite season and what it smells like", "Nature", "easy"),
+    ("How a single seed becomes a forest", "Nature", "medium"),
+    ("Clouds", "Nature", "easy"),
+    ("Why we should (or shouldn't) bring back extinct species", "Nature", "hard"),
+    ("Homework should be banned", "Opinions", "medium"),
+    ("The most overrated invention", "Opinions", "medium"),
+    ("Is it better to be early or exactly on time?", "Opinions", "easy"),
+    ("Cities should be designed for walking, not cars", "Opinions", "hard"),
+    ("The best advice you ever ignored", "Opinions", "medium"),
+    ("Should everyone learn a second language?", "Opinions", "medium"),
+    ("Pineapple on pizza: defend your position", "Opinions", "easy"),
+    ("A four-day work week", "Opinions", "hard"),
+    ("A time you got completely lost", "Stories", "easy"),
+    ("The moment you changed your mind about something", "Stories", "medium"),
+    ("A teacher who mattered", "Stories", "easy"),
+    ("The worst trip that turned into a good story", "Stories", "medium"),
+    ("Your first time trying something scary", "Stories", "easy"),
+    ("A mistake you're secretly proud of", "Stories", "medium"),
+    ("Tell a story that ends with a twist", "Stories", "hard"),
+    ("The best day of the last year", "Stories", "easy"),
+    ("How the internet actually reaches your phone", "Tech & science", "hard"),
+    ("A technology you would un-invent", "Tech & science", "medium"),
+    ("Why the sky is blue, explained without jargon", "Tech & science", "medium"),
+    ("What AI should never be allowed to do", "Tech & science", "hard"),
+    ("The coolest fact you know about space", "Tech & science", "easy"),
+    ("How you would explain gravity to an alien", "Tech & science", "medium"),
+    ("Your phone's most underrated feature", "Tech & science", "easy"),
+    ("A scientific discovery that changed everyday life", "Tech & science", "medium"),
+    ("Your favourite game, and why it hooks you", "Games & fun", "easy"),
+    ("Pitch a new board game in this speech", "Games & fun", "hard"),
+    ("The perfect weekend", "Games & fun", "easy"),
+    ("A superpower that would be more annoying than useful", "Games & fun", "medium"),
+    ("Convince us to watch your favourite film", "Games & fun", "medium"),
+    ("If you could master one skill overnight", "Games & fun", "easy"),
+    ("The rules of a sport, explained to someone who has never seen it", "Games & fun", "medium"),
+    ("Design a theme park ride", "Games & fun", "medium"),
+    ("Why video games are (or aren't) art", "Games & fun", "hard"),
+    ("The best snack for a long road trip", "Games & fun", "easy"),
+]
+
+TOPICS: list[dict] = [{"text": t, "category": c, "level": lv} for t, c, lv in _TOPICS]

@@ -164,7 +164,7 @@ export function renderRehearse(root: HTMLElement, goToReport: () => void): void 
         }
       }, 50);
     });
-    if (!recorder) closeMic();
+    if (recorder?.state !== "recording") closeMic();
     calibBtn.removeAttribute("disabled");
     if (samples.length < 10) {
       calibInfo.textContent = "Heard too little speech to calibrate. Try again a little closer to the microphone.";

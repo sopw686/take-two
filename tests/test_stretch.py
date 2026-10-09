@@ -120,3 +120,17 @@ def test_compare_takes_counts_outcomes_per_mark():
     pause = next(m for m in cmp["marks"] if m["kind"] == "/")
     assert pause["statuses"] == ["missing", "met"]
     assert any("2 takes" in s or "of 2" in s for s in cmp["summary"])
+
+
+def _key_take(status, pct):
+    return {"take_id": "t", "lines": [{"index": 0, "text": "key", "key": {"status": status, "wpm_vs_median_pct": pct}}],
+            "pauses": [], "sections": [], "defines": []}
+
+
+def test_compare_does_not_call_a_missed_pause_rushing():
+    # Diverged because of the pause (slower than median), plus one met take that ran fast.
+    cmp = compare_takes([_key_take("diverged", -20.0), _key_take("diverged", -15.0), _key_take("met", 5.0)])
+    assert not any("rushed" in s for s in cmp["summary"])
+    assert any("diverged on key line 1" in s and "2 of 3" in s for s in cmp["summary"])
+    cmp = compare_takes([_key_take("diverged", 10.0), _key_take("diverged", 12.0)])
+    assert any("rushed key line 1" in s and "2 of 2" in s for s in cmp["summary"])

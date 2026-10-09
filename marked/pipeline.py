@@ -21,6 +21,13 @@ log = logging.getLogger(__name__)
 
 def run_take(src_audio: Path, script_text: str, settings: Settings, label: str = "",
              original_name: str = "") -> dict:
+    take_id, timing = _ingest(src_audio, original_name, _initial_prompt(settings))
+    (takes.take_path(take_id) / "script.md").write_text(script_text, encoding="utf-8")
+    return reanalyze(take_id, script_text, settings, label=label, timing=timing)
+
+
+def _ingest(src_audio: Path, original_name: str, initial_prompt: str | None) -> tuple[str, dict]:
+    """New take folder with the original upload, a 16 kHz WAV and the transcript."""
     take_id = takes.new_take_id()
     tdir = takes.take_path(take_id)
     tdir.mkdir(parents=True, exist_ok=True)
@@ -35,13 +42,10 @@ def run_take(src_audio: Path, script_text: str, settings: Settings, label: str =
 
     transcriber = get_transcriber()
     t0 = time.time()
-    transcript = transcriber.transcribe(audio, initial_prompt=_initial_prompt(settings))
+    transcript = transcriber.transcribe(audio, initial_prompt=initial_prompt)
     t_stt = time.time() - t0
     takes.save_json(tdir / "transcript.json", transcript.to_dict())
-    (tdir / "script.md").write_text(script_text, encoding="utf-8")
-
-    timing = {"decode_s": round(t_decode, 2), "stt_s": round(t_stt, 2)}
-    return reanalyze(take_id, script_text, settings, label=label, timing=timing)
+    return take_id, {"decode_s": round(t_decode, 2), "stt_s": round(t_stt, 2)}
 
 
 def reanalyze(take_id: str, script_text: str, settings: Settings, label: str | None = None,
@@ -94,3 +98,56 @@ def _initial_prompt(settings: Settings) -> str | None:
     if settings.conventions_enabled:
         return "Um, uh, so, you know, like, I mean, we measured the, uh, result."
     return None
+
+
+# ---- Improvise -------------------------------------------------------------------
+# Fillers are the point of Improvise, so Whisper is always nudged to keep them.
+IMPROV_PROMPT = "Um, so, uh, I think, you know, it's like, um, kind of, I mean, uh, interesting."
+
+
+def run_improv(src_audio: Path, topic: str, goal_s: float | None, content: bool, settings: Settings,
+               label: str = "", original_name: str = "") -> dict:
+    take_id, timing = _ingest(src_audio, original_name, IMPROV_PROMPT)
+    takes.save_json(takes.take_path(take_id) / "improv.json", {"topic": topic, "goal_s": goal_s, "content": content})
+    return reanalyze_improv(take_id, settings, label=label, timing=timing)
+
+
+def reanalyze_improv(take_id: str, settings: Settings, label: str | None = None, timing: dict | None = None) -> dict:
+    from marked.improv import analyze_improv
+
+    tdir = takes.take_path(take_id)
+    meta = takes.load_json(tdir / "improv.json")
+    transcript = Transcript.from_dict(takes.load_json(tdir / "transcript.json"))
+    audio = audio_mod.load_audio(tdir / "audio.wav")
+    duration = len(audio) / audio_mod.SR
+    silences, method = audio_mod.silence_regions(audio, min_silence_s=settings.min_silence_s)
+    rep = analyze_improv(transcript.words, silences, audio, audio_mod.SR, settings,
+                         topic=meta.get("topic", ""), goal_s=meta.get("goal_s"), duration_s=duration)
+    prev = takes.load_take(take_id) or {}
+    result = {
+        "mode": "improv",
+        "take_id": take_id,
+        "created_at": prev.get("created_at") or datetime.now().isoformat(timespec="seconds"),
+        "label": label if label is not None else prev.get("label", ""),
+        "topic": meta.get("topic", ""),
+        "goal_s": meta.get("goal_s"),
+        "content": bool(meta.get("content")),
+        "settings": settings.model_dump(),
+        "duration_s": round(duration, 2),
+        "summary": rep.pop("summary"),
+        "improv": rep,
+        "stt": transcriber_info(transcript),
+        "silence_method": method,
+        "transcript": {"text": transcript.text,
+                       "words": [{"i": i, "text": w.text, "start": w.start, "end": w.end, "prob": round(w.prob, 3)}
+                                 for i, w in enumerate(transcript.words)]},
+        "audio_url": f"/takes/{take_id}/audio.wav",
+        "timing": timing or prev.get("timing", {}),
+    }
+    result["history"] = takes.improv_history(take_id, before=result["created_at"])
+    if "content_review" in prev:
+        result["content_review"] = prev["content_review"]  # about the words, which re-analysis does not change
+    if "coaching" in prev and prev.get("settings") == result["settings"]:
+        result["coaching"] = prev["coaching"]  # cites bands, so only valid under the same settings
+    takes.save_json(tdir / "analysis.json", result)
+    return result

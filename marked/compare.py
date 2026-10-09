@@ -58,8 +58,15 @@ def compare_takes(analyses: list[dict]) -> dict:
             bad = c.get("diverged", 0) + c.get("missing", 0) + c.get("short", 0)
             if bad >= 2:
                 if m["kind"] == "KEY":
-                    rushed = any(v is not None and v > 0 for v in m["values"])
-                    summary.append(f"You {'rushed' if rushed else 'diverged on'} {label} in {bad} of {n} takes.")
+                    # "Rushed" only for takes that diverged AND ran faster than the median; other divergences
+                    # (e.g. a missing pause after the line) are reported as such.
+                    rushed = sum(1 for s, v in zip(m["statuses"], m["values"]) if s == "diverged" and v is not None and v > 0)
+                    other = bad
+                    if rushed >= 2:
+                        summary.append(f"You rushed {label} in {rushed} of {n} takes.")
+                        other = bad - rushed
+                    if other >= 2:
+                        summary.append(f"You diverged on {label} in {other} of {n} takes.")
                 else:
                     summary.append(f"{label[0].upper() + label[1:]} came up short in {bad} of {n} takes.")
             elif m["met"] == n:

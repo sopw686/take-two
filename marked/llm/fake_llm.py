@@ -21,10 +21,45 @@ class FakeLLM:
     model = "none"
     available = True
 
-    def complete_structured(self, system: str, user: str, output: type[T], max_tokens: int = 4000) -> T | None:
+    def complete_structured(self, system: str, user: str, output: type[T], max_tokens: int = 16000) -> T | None:
         if output.__name__ == "Proposal":
             return output.model_validate(self._proposal(user))  # type: ignore[return-value]
+        if output.__name__ == "ImprovCoachOutput":
+            return output.model_validate(self._improv_coach(user))  # type: ignore[return-value]
+        if output.__name__ == "ContentReview":
+            return output.model_validate(self._content_review(user))  # type: ignore[return-value]
         return None  # define checks fall back to the heuristic
+
+    @staticmethod
+    def _improv_coach(user: str) -> dict:
+        import json
+        try:
+            data = json.loads(user[user.index("{"): user.rindex("}") + 1])
+        except ValueError:
+            return {"suggestions": []}
+        f, e = data.get("fillers", {}), data.get("engagement", {})
+        out = [{"focus": "fillers", "metric": f"{f.get('per_100')} per 100 words",
+                "text": f"(fake) You used {f.get('count')} fillers, {f.get('per_100')} per 100 words. Swap each for a silent beat."}]
+        if e.get("pitch_range_st") is not None:
+            out.append({"focus": "engagement", "metric": f"{e['pitch_range_st']} semitones",
+                        "text": f"(fake) Pitch range was {e['pitch_range_st']} semitones; lift the key word of each sentence."})
+        out.append({"focus": "confidence", "metric": "", "text": "(fake) Sound more confident."})  # no number: dropped by code
+        return {"suggestions": out}
+
+    @staticmethod
+    def _content_review(user: str) -> dict:
+        m = re.search(r'"""\n(.*)\n"""', user, flags=re.S)
+        words = (m.group(1) if m else "").split()
+        first, last = " ".join(words[:6]), " ".join(words[-6:])
+        mid = " ".join(words[len(words) // 2: len(words) // 2 + 5])
+        topic = re.search(r"^Topic: (.*)$", user, flags=re.M)
+        return {
+            "hook": {"verdict": "weak", "note": "(fake) The opening states the topic instead of making us curious.", "evidence_quote": first},
+            "on_topic": {"verdict": "present", "note": "(fake) Stays with the topic throughout.", "evidence_quote": mid},
+            "suspense": {"verdict": "present", "note": "(fake) This quote is invented, so code should drop this item.", "evidence_quote": "a sentence nobody said"},
+            "ending": {"verdict": "weak", "note": "(fake) The last line trails off rather than closing.", "evidence_quote": last},
+            "rewrite_opening": f"(fake) What if everything you thought about {topic.group(1) if topic else 'this'} was only half the story?",
+        }
 
     @staticmethod
     def _proposal(user: str) -> dict:

@@ -12,6 +12,7 @@ dependencies = [
     "soundfile>=0.12",
     "faster-whisper>=1.1.0",
     "anthropic>=1.0",
+    "praat-parselmouth>=0.4.5",  # pitch for Improvise (and the emphasis check)
 ]
 
 [project.optional-dependencies]

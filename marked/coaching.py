@@ -113,5 +113,5 @@ def coach(analysis: dict, llm, earlier: list[dict] | None = None) -> dict:
                 "reason": "Everything met its marks in this take; nothing to suggest."}
     data = compact_measurements(analysis, history_for(analysis, earlier or []))
     user = "Measurements for the latest take (JSON):\n" + json.dumps(data, indent=1) + "\n\nWrite at most three suggestions, or none if all marks were met."
-    out = llm.complete_structured(SYSTEM, user, CoachOutput, max_tokens=1500)
+    out = llm.complete_structured(SYSTEM, user, CoachOutput, max_tokens=16000)
     return validate(out, analysis)

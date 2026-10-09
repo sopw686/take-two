@@ -1,4 +1,4 @@
-import type { Analysis, CompareResult, Health, Settings, SuggestResponse, TakeSummary } from "./types";
+import type { Analysis, CompareResult, Health, ImprovAnalysis, Settings, SuggestResponse, TakeSummary, Topic } from "./types";
 
 async function j<T>(r: Response): Promise<T> {
   if (!r.ok) {
@@ -25,11 +25,11 @@ export const api = {
     fd.append("label", label);
     return fetch("/api/takes", { method: "POST", body: fd }).then((r) => j<Analysis>(r));
   },
-  reanalyze: (takeId: string, script: string, settings: Settings) =>
+  reanalyze: (takeId: string, script: string | null, settings: Settings) =>
     fetch(`/api/takes/${takeId}/reanalyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ script, settings }),
+      body: JSON.stringify(script === null ? { settings } : { script, settings }),
     }).then((r) => j<Analysis>(r)),
   listTakes: () => fetch("/api/takes").then((r) => j<TakeSummary[]>(r)),
   getTake: (id: string) => fetch(`/api/takes/${id}`).then((r) => j<Analysis>(r)),
@@ -46,5 +46,30 @@ export const api = {
       body: JSON.stringify({ script, accepted }),
     }).then((r) => j<{ text: string }>(r)),
   coach: (takeId: string) => fetch(`/api/takes/${takeId}/coach`, { method: "POST" }).then((r) => j<Analysis>(r)),
+  getAnyTake: (id: string) => fetch(`/api/takes/${id}`).then((r) => j<Analysis | ImprovAnalysis>(r)),
+  improvTopics: () => fetch("/api/improv/topics").then((r) => j<{ categories: string[]; topics: Topic[] }>(r)),
+  async createImprov(audio: Blob, filename: string, topic: string, goalS: number | null, content: boolean, settings: Settings,
+    label = ""): Promise<ImprovAnalysis> {
+    const fd = new FormData();
+    fd.append("audio", audio, filename);
+    fd.append("topic", topic);
+    if (goalS !== null) fd.append("goal_s", String(goalS));
+    fd.append("content", String(content));
+    fd.append("settings", JSON.stringify(settings));
+    fd.append("label", label);
+    return fetch("/api/improv", { method: "POST", body: fd }).then((r) => j<ImprovAnalysis>(r));
+  },
+  reanalyzeImprov: (takeId: string, settings: Settings) =>
+    fetch(`/api/improv/${takeId}/reanalyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ settings }),
+    }).then((r) => j<ImprovAnalysis>(r)),
+  coachImprov: (takeId: string, content?: boolean) =>
+    fetch(`/api/improv/${takeId}/coach`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(content === undefined ? {} : { content }),
+    }).then((r) => j<ImprovAnalysis>(r)),
   compare: (takeId: string) => fetch(`/api/compare?take_id=${encodeURIComponent(takeId)}`).then((r) => j<CompareResult>(r)),
 };

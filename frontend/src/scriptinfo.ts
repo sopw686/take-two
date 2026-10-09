@@ -17,7 +17,7 @@ export function stripLineMarks(line: string): string {
     .replace(/<!--.*?-->/g, "")
     .split(/\s+/)
     .filter((w) => w && w !== "/" && w !== "//")
-    .map((w) => w.replace(/^\*([^\s*]+)\*$/, "$1"))
+    .map((w) => w.replace(/^\*([^\s*]+)\*([^\w\s*]*)$/, "$1$2"))
     .join(" ");
 }
 

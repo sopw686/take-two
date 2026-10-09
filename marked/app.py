@@ -6,9 +6,11 @@ import json
 import logging
 import tempfile
 from pathlib import Path
+from urllib.parse import urlsplit
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
@@ -21,6 +23,21 @@ log = logging.getLogger("marked")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 app = FastAPI(title="Marked", docs_url="/api/docs", redoc_url=None)
+
+# The server is local-only. Reject foreign Host headers (DNS rebinding) and cross-site writes:
+# a multipart POST needs no CORS preflight, so any web page could otherwise create takes or spend LLM credits.
+LOCAL_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(LOCAL_HOSTS))
+
+
+@app.middleware("http")
+async def _same_origin_writes(request: Request, call_next):  # type: ignore[no-untyped-def]
+    origin = request.headers.get("origin")
+    if request.method not in ("GET", "HEAD", "OPTIONS") and origin:
+        host = urlsplit(origin).hostname or ""
+        if host not in LOCAL_HOSTS and f"[{host}]" not in LOCAL_HOSTS:
+            return JSONResponse({"detail": "cross-origin request refused"}, status_code=403)
+    return await call_next(request)
 
 
 def _parse_settings(raw: str | None) -> Settings:
@@ -67,6 +84,8 @@ async def sample() -> dict:
 async def create_take(audio: UploadFile = File(...), script: str = Form(...), settings: str | None = Form(None),
                       label: str = Form("")) -> dict:
     st = _parse_settings(settings)
+    # Multipart form fields arrive with CRLF; on Windows write_text would turn that into \r\r\n in script.md.
+    script = script.replace("\r\n", "\n")
     if not script.strip():
         raise HTTPException(400, "script is empty")
     suffix = Path(audio.filename or "").suffix or ".webm"
@@ -83,7 +102,7 @@ async def create_take(audio: UploadFile = File(...), script: str = Form(...), se
 
 
 class ReanalyzeBody(BaseModel):
-    script: str
+    script: str | None = None  # None: keep the take's own script (e.g. a settings change)
     settings: Settings = Settings()
     label: str | None = None
 
@@ -96,7 +115,14 @@ async def reanalyze_take(take_id: str, body: ReanalyzeBody) -> dict:
         raise HTTPException(400, "bad take id")
     if not (tdir / "transcript.json").exists():
         raise HTTPException(404, "take not found")
-    return await run_in_threadpool(pipeline.reanalyze, take_id, body.script, body.settings, body.label)
+    _reject_improv(take_id)
+    script = body.script
+    if script is None:
+        p = tdir / "script.md"
+        if not p.exists():
+            raise HTTPException(404, "take has no saved script")
+        script = p.read_text(encoding="utf-8")
+    return await run_in_threadpool(pipeline.reanalyze, take_id, script, body.settings, body.label)
 
 
 @app.get("/api/takes")
@@ -136,6 +162,7 @@ async def coach_take(take_id: str) -> dict:
         raise HTTPException(400, "bad take id")
     if data is None:
         raise HTTPException(404, "take not found")
+    _reject_improv(take_id, data)
     earlier = [a for a in takes.takes_with_same_script(take_id) if a.get("take_id") != take_id]
     data["coaching"] = await run_in_threadpool(coach, data, get_llm(), earlier)
     takes.save_json(takes.take_path(take_id) / "analysis.json", data)
@@ -146,6 +173,7 @@ async def coach_take(take_id: str) -> dict:
 async def compare(take_id: str) -> dict:
     from marked.compare import compare_takes
     try:
+        _reject_improv(take_id)
         group = takes.takes_with_same_script(take_id)
     except ValueError:
         raise HTTPException(400, "bad take id")
@@ -156,10 +184,22 @@ async def compare(take_id: str) -> dict:
     return result
 
 
+def _reject_improv(take_id: str, data: dict | None = None) -> None:
+    """Script-take routes refuse Improvise takes, which have no script or marks."""
+    data = data if data is not None else takes.load_take(take_id)
+    if data and data.get("mode") == "improv":
+        raise HTTPException(400, "this is an Improvise take; use /api/improv")
+
+
 # ---- LLM features ------------------------------------------------------------
 from marked.suggest import router as suggest_router  # noqa: E402
 
 app.include_router(suggest_router)
+
+# ---- Improvise -----------------------------------------------------------------
+from marked.improv_routes import router as improv_router  # noqa: E402
+
+app.include_router(improv_router)
 
 
 # ---- frontend ------------------------------------------------------------------

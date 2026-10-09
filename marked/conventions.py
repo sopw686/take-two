@@ -11,7 +11,7 @@ import re
 
 from marked.config import Settings
 from marked.marks import normalize_word
-from marked.stt.base import Transcript
+from marked.stt.base import Transcript, Word
 
 FILLERS_1 = {"um", "uh", "umm", "uhh", "erm", "er", "hmm", "mm", "like"}
 FILLERS_2 = {("you", "know"), ("i", "mean"), ("sort", "of"), ("kind", "of")}
@@ -35,20 +35,7 @@ def conventions_report(transcript: Transcript, analysis: dict, settings: Setting
     else:
         wpm_status = "diverged"
 
-    fillers: list[dict] = []
-    norm = [(normalize_word(w.text), w) for w in spoken_words]
-    i = 0
-    while i < len(norm):
-        toks, w = norm[i]
-        t = toks[0] if toks else ""
-        nxt = norm[i + 1][0][0] if i + 1 < len(norm) and norm[i + 1][0] else ""
-        if (t, nxt) in FILLERS_2:
-            fillers.append({"text": f"{w.text} {norm[i + 1][1].text}", "start": w.start, "end": norm[i + 1][1].end})
-            i += 2
-            continue
-        if t in FILLERS_1 and _is_filler_like(t, w.text):
-            fillers.append({"text": w.text, "start": w.start, "end": w.end})
-        i += 1
+    fillers = find_fillers(spoken_words)
     per100 = (len(fillers) / n * 100.0) if n else None
     target = settings.conventions_filler_per_100
     if per100 is None:
@@ -73,6 +60,26 @@ def conventions_report(transcript: Transcript, analysis: dict, settings: Setting
         "fillers": fillers,
         "note": "Whisper often drops um/uh; the filler count is a lower bound.",
     }
+
+
+def find_fillers(words: list[Word], pairs: set[tuple[str, str]] = FILLERS_2) -> list[dict]:
+    """Filler words and two-word filler phrases, with times and word indexes (i..j inclusive)."""
+    fillers: list[dict] = []
+    norm = [(normalize_word(w.text), w) for w in words]
+    i = 0
+    while i < len(norm):
+        toks, w = norm[i]
+        t = toks[0] if toks else ""
+        nxt = norm[i + 1][0][0] if i + 1 < len(norm) and norm[i + 1][0] else ""
+        if (t, nxt) in pairs:
+            fillers.append({"text": f"{w.text} {norm[i + 1][1].text}", "start": w.start, "end": norm[i + 1][1].end,
+                            "i": i, "j": i + 1})
+            i += 2
+            continue
+        if t in FILLERS_1 and _is_filler_like(t, w.text):
+            fillers.append({"text": w.text, "start": w.start, "end": w.end, "i": i, "j": i})
+        i += 1
+    return fillers
 
 
 def _is_filler_like(norm: str, raw: str) -> bool:

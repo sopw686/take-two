@@ -49,17 +49,18 @@ export async function renderTakes(root: HTMLElement, openReport: () => void): Pr
     return;
   }
   const cmpHolder = h("div", {});
-  if (state.analysis) {
+  if (state.analysis && state.current === "script") {
     api.compare(state.analysis.take_id).then((cmp) => cmpHolder.replaceChildren(compareCard(cmp))).catch(() => undefined);
   }
   root.append(
     cmpHolder,
     h("p", { class: "muted small" }, "Each take keeps its audio, transcript and analysis under takes/<id>/. Open one to see its report, or re-analyze it against an edited script."),
-    h("ul", { class: "take-list" }, ...takes.map((t) => h("li", { class: state.analysis?.take_id === t.take_id ? "current" : "" },
+    h("ul", { class: "take-list" }, ...takes.map((t) => h("li", { class: (state.current === "improv" ? state.improv?.take_id : state.analysis?.take_id) === t.take_id ? "current" : "" },
+      t.mode === "improv" ? h("span", { class: "mode-badge" }, "Improvise") : null,
       h("button", { class: "linklike", type: "button", onClick: async () => {
-        state.setAnalysis(await api.getTake(t.take_id));
+        state.setTake(await api.getAnyTake(t.take_id));
         openReport();
-      } }, t.label || t.take_id),
+      } }, t.mode === "improv" ? `${t.topic ?? "Improvise"}${t.label ? ` · ${t.label}` : ""}` : t.label || t.take_id),
       h("span", { class: "muted small" }, ` ${new Date(t.created_at).toLocaleString()} · ${fmtTime(t.duration_s)} · ${t.stt.model}`),
       h("ul", { class: "small" }, ...t.summary.map((s) => h("li", {}, s)))))),
   );

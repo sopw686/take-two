@@ -2,20 +2,22 @@ import "./styles.css";
 import { api } from "./api";
 import { h } from "./dom";
 import { renderEditor } from "./editor";
+import { presetTopic, renderImprovise, stopImprovise } from "./improvise";
+import { renderImprovReport } from "./improvreport";
 import { renderRehearse, stopRehearsal } from "./rehearse";
 import { renderReport } from "./report";
 import { openSettings } from "./settings";
 import { state } from "./state";
 import { renderTakes } from "./takes";
 
-type Tab = "script" | "rehearse" | "report" | "takes";
+type Tab = "script" | "rehearse" | "improvise" | "report" | "takes";
 const main = document.getElementById("main") as HTMLElement;
 const tabs = document.getElementById("tabs") as HTMLElement;
 const privacy = document.getElementById("privacy") as HTMLElement;
 
 function currentTab(): Tab {
   const t = location.hash.replace("#", "") as Tab;
-  return (["script", "rehearse", "report", "takes"] as Tab[]).includes(t) ? t : "script";
+  return (["script", "rehearse", "improvise", "report", "takes"] as Tab[]).includes(t) ? t : "script";
 }
 
 function go(tab: Tab): void {
@@ -27,11 +29,16 @@ function render(): void {
   const tab = currentTab();
   tabs.querySelectorAll("a").forEach((a) => a.classList.toggle("active", a.dataset.tab === tab));
   if (tab !== "rehearse") stopRehearsal();
+  if (tab !== "improvise") stopImprovise();
   (document.getElementById("player") as HTMLAudioElement).pause();
   switch (tab) {
     case "script": renderEditor(main); break;
     case "rehearse": renderRehearse(main, () => go("report")); break;
-    case "report": renderReport(main); break;
+    case "improvise": void renderImprovise(main, () => go("report")); break;
+    case "report":
+      if (state.current === "improv" && state.improv) renderImprovReport(main, (topic) => { presetTopic(topic); go("improvise"); });
+      else renderReport(main);
+      break;
     case "takes": void renderTakes(main, () => go("report")); break;
   }
 }
@@ -60,9 +67,9 @@ async function boot(): Promise<void> {
     }
   }
   const last = state.lastTakeId();
-  if (last && !state.analysis) {
+  if (last && !state.analysis && !state.improv) {
     try {
-      state.setAnalysis(await api.getTake(last));
+      state.setTake(await api.getAnyTake(last));
     } catch {
       /* take may have been deleted */
     }
@@ -72,10 +79,20 @@ async function boot(): Promise<void> {
 
 window.addEventListener("hashchange", render);
 (document.getElementById("settings-btn") as HTMLButtonElement).addEventListener("click", () => openSettings(async () => {
+  if (state.current === "improv" && state.improv) {
+    try {
+      state.setImprov(await api.reanalyzeImprov(state.improv.take_id, state.effectiveSettings()));
+    } catch (err) {
+      console.warn("re-analysis after settings change failed", err);
+    }
+    render();
+    return;
+  }
   const a = state.analysis;
   if (a) {
     try {
-      state.setAnalysis(await api.reanalyze(a.take_id, state.scriptText, state.effectiveSettings()));
+      // null: keep the take's own script; the editor may hold a different one.
+      state.setAnalysis(await api.reanalyze(a.take_id, null, state.effectiveSettings()));
     } catch (err) {
       console.warn("re-analysis after settings change failed", err);
     }

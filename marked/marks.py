@@ -18,7 +18,7 @@ SECTION_RE = re.compile(r"^\s*##\s*(?P<name>.*?)\s*(?:\[(?P<m>\d+):(?P<s>\d{1,2}
 KEY_RE = re.compile(r"^\s*\[KEY\]\s*", re.IGNORECASE)
 DEFINE_RE = re.compile(r"\[DEFINE:\s*(?P<term>[^\]]+?)\s*\]", re.IGNORECASE)
 PAUSE_RE = re.compile(r"^(?P<kind>//?)$")
-EMPH_RE = re.compile(r"^\*(?P<word>[^\s*]+)\*$")
+EMPH_RE = re.compile(r"^\*(?P<word>[^\s*]+)\*(?P<punct>[^\w\s*]*)$")  # *word*, keeps trailing punctuation
 COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 
 
@@ -159,7 +159,7 @@ def strip_line_marks(raw: str) -> tuple[str, bool, list[str], list[PauseMark], l
         em = EMPH_RE.match(piece)
         if em:
             emphasis.append(len(words))
-            words.append(em.group("word"))
+            words.append(em.group("word") + em.group("punct"))
             continue
         words.append(piece)
     return " ".join(words), is_key, terms, pauses, emphasis

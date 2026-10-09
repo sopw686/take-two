@@ -30,7 +30,7 @@ function highlightLine(line: string): string {
       continue;
     }
     if (p === "/" || p === "//") out += `<span class="hl-pause">${p}</span>`;
-    else if (/^\*[^\s*]+\*$/.test(p)) out += `<span class="hl-emph">${esc(p)}</span>`;
+    else if (/^\*[^\s*]+\*[^\w\s*]*$/.test(p)) out += `<span class="hl-emph">${esc(p)}</span>`;
     else out += esc(p);
   }
   // [DEFINE: multi word term] spans whitespace; colour it after the fact.
