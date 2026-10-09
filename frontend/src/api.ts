@@ -106,6 +106,9 @@ export const api = {
   startImprovJob: (audio: Blob, filename: string, topic: string, goalS: number | null, content: boolean, settings: Settings, label = "") =>
     fetch("/api/jobs/improv", { method: "POST", body: takeForm(audio, filename,
       { topic, content: String(content), label, ...(goalS !== null ? { goal_s: String(goalS) } : {}) }, settings) }).then((r) => j<JobStatus>(r)),
+  startDrillJob: (parentId: string, audio: Blob, filename: string, kind: "line" | "section", index: number, settings: Settings) =>
+    fetch(`/api/jobs/drill/${parentId}`, { method: "POST", body: takeForm(audio, filename, { kind, index: String(index) }, settings) })
+      .then((r) => j<JobStatus>(r)),
   startRetryJob: (takeId: string, body: { script?: string; settings?: Settings } = {}) =>
     post(`/api/jobs/retry/${takeId}`, body).then((r) => j<JobStatus>(r)),
   job: (takeId: string) => fetch(`/api/jobs/${takeId}`).then((r) => j<JobStatus>(r)),

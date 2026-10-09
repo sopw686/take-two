@@ -1,5 +1,7 @@
 import "./styles.css";
 import { api } from "./api";
+import { stopDrill } from "./drill";
+import { stopSegment } from "./player";
 import { h } from "./dom";
 import { renderEditor } from "./editor";
 import { presetTopic, renderImprovise, stopImprovise } from "./improvise";
@@ -31,6 +33,8 @@ function render(): void {
   tabs.querySelectorAll("a").forEach((a) => a.classList.toggle("active", a.dataset.tab === tab));
   if (tab !== "rehearse") stopRehearsal();
   if (tab !== "improvise") stopImprovise();
+  stopDrill();
+  stopSegment();
   const p = document.getElementById("player") as HTMLAudioElement;
   p.pause();
   p.ontimeupdate = null;  // the view that set it is gone

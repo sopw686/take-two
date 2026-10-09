@@ -320,3 +320,18 @@ button.mark.pause { font-size: 14px; }
 .stepper li.done { color: var(--met); border-color: #b9dcc9; background: var(--met-bg); }
 .stepper li.done::before { content: "✓ "; }
 .stepper li.current { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+
+/* drills */
+.drill-btn { margin: 0 6px; font-family: var(--sans); font-size: 12px; vertical-align: middle; }
+.section-head .drill-btn { font-size: 12px; }
+.drill-panel { background: var(--paper); border: 1px solid var(--accent); border-radius: 10px; padding: 12px 16px; margin: 6px 0 12px; font-family: var(--sans); font-size: 15px; line-height: 1.5; cursor: default; }
+.drill-head { display: flex; align-items: center; gap: 8px; }
+.drill-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 6px 0; }
+.drill-summary { margin: 8px 0 4px; padding-left: 20px; }
+.drill-list { list-style: none; padding-left: 18px; margin: 6px 0 0; }
+.drill-list li { padding: 2px 0; border: 0; }
+.drill-card ul { margin: 0 0 6px; padding-left: 20px; font-family: var(--serif); font-size: 17px; }
+
+/* A/B playback in the take comparison */
+.play-cell { margin-left: 4px; border: 1px solid var(--rule); background: transparent; border-radius: 999px; width: 24px; height: 24px; padding: 0; font-size: 11px; color: var(--accent); vertical-align: middle; }
+.play-cell.on { background: var(--accent); color: white; border-color: var(--accent); }

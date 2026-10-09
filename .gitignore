@@ -9,3 +9,4 @@ takes/*
 .env
 *.egg-info/
 .devtakes/
+.claude/worktrees/

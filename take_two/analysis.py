@@ -106,7 +106,8 @@ def total_fit(section_rows: list[dict], spoken_start: float | None, spoken_end: 
 
 
 def analyze(script: Script, transcript: Transcript, silences: list[Silence], settings: Settings,
-            audio_duration: float) -> dict:
+            audio_duration: float, baseline_override: dict | None = None) -> dict:
+    """baseline_override {"median_wpm", "source"}: judge rates against another take's median (a drill has none of its own)."""
     al = align(script, transcript)
     n_lines = len(script.lines)
 
@@ -143,6 +144,8 @@ def analyze(script: Script, transcript: Transcript, silences: list[Silence], set
     base_wpms = [r["wpm"] for r, ln in zip(line_rows, script.lines)
                  if r["status"] == "ok" and r["wpm"] and ln.word_count >= settings.baseline_min_words]
     median_wpm = median(base_wpms) if base_wpms else None
+    if baseline_override is not None:
+        median_wpm = baseline_override.get("median_wpm")
     spoken_start = min((r["start"] for r in line_rows if r["start"] is not None), default=None)
     spoken_end = max((r["end"] for r in line_rows if r["end"] is not None), default=None)
     inner_pauses = [s.duration for s in silences
@@ -153,6 +156,7 @@ def analyze(script: Script, transcript: Transcript, silences: list[Silence], set
         "min_words_per_line": settings.baseline_min_words,
         "median_pause_s": _r(median(inner_pauses), 2) if inner_pauses else None,
         "pauses_counted": len(inner_pauses),
+        "median_source": baseline_override.get("source") if baseline_override else "this take",
     }
 
     # ---- sections ---------------------------------------------------------
@@ -211,6 +215,8 @@ def analyze(script: Script, transcript: Transcript, silences: list[Silence], set
             pct = key["wpm_vs_median_pct"]
             if pct is None:
                 key["rate_status"] = "unknown"
+                if baseline_override is not None:
+                    key["rate_note"] = "The full take this drill came from has no median, so the rate is not compared."
             elif pct <= -settings.key_slower_pct:
                 key["rate_status"] = "met"
             elif pct <= 0:

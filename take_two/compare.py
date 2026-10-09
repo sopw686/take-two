@@ -11,20 +11,27 @@ DIVERGED = {"KEY": {"diverged"}, "/": {"short", "missing"}, "//": {"short", "mis
 
 
 def _key_marks(a: dict) -> dict[tuple, dict]:
+    """Marks of one take keyed by their position in the script, with the moment to play for each (at, until)."""
     out = {}
+    lines = {r["index"]: r for r in a.get("lines", [])}
     for r in a.get("lines", []):
         if r.get("key"):
             out[("KEY", r["index"])] = {"kind": "KEY", "line": r["index"], "text": r["text"], "status": r["key"]["status"],
-                                        "value": r["key"].get("wpm_vs_median_pct")}
+                                        "value": r["key"].get("wpm_vs_median_pct"), "at": r.get("start"), "until": r.get("end")}
     for p in a.get("pauses", []):
+        w = p.get("window") or [None, None]
         out[(p["kind"], p["line"], p["word_index"])] = {"kind": p["kind"], "line": p["line"], "word_index": p["word_index"],
                                                        "status": p["status"], "value": p.get("measured_s"),
-                                                       "text": f"{p.get('before') or ''} {p['kind']} {p.get('after') or ''}".strip()}
+                                                       "text": f"{p.get('before') or ''} {p['kind']} {p.get('after') or ''}".strip(),
+                                                       "at": w[0], "until": w[1]}
     for s in a.get("sections", []):
+        first = lines.get(s.get("line_start"), {})
         out[("section", s["name"])] = {"kind": "section", "name": s["name"], "status": s["status"], "value": s.get("delta_s"),
-                                       "text": s["name"]}
+                                       "text": s["name"], "at": s.get("start"), "until": first.get("end")}
     for d in a.get("defines", []):
-        out[("DEFINE", d["term"].lower())] = {"kind": "DEFINE", "term": d["term"], "status": d["status"], "value": None, "text": d["term"]}
+        ev = d.get("evidence") or {}
+        out[("DEFINE", d["term"].lower())] = {"kind": "DEFINE", "term": d["term"], "status": d["status"], "value": None, "text": d["term"],
+                                              "at": ev.get("start", d.get("first_spoken_at")), "until": ev.get("end")}
     return out
 
 
@@ -41,8 +48,11 @@ def compare_takes(analyses: list[dict]) -> dict:
         rows = [m.get(k) for m in per_take]
         present = [r for r in rows if r]
         statuses = [r["status"] for r in present]
-        base = {kk: vv for kk, vv in present[-1].items() if kk not in ("status", "value")}
-        marks.append({**base, "takes": len(present), "statuses": statuses, "values": [r["value"] for r in present],
+        base = {kk: vv for kk, vv in present[-1].items() if kk not in ("status", "value", "at", "until")}
+        # Per-take lists line up with the takes (None where a take does not have the mark), so the table can index them.
+        marks.append({**base, "takes": len(present), "statuses": [r["status"] if r else None for r in rows],
+                      "values": [r["value"] if r else None for r in rows],
+                      "times": [[r.get("at"), r.get("until")] if r else None for r in rows],
                       "met": sum(1 for s in statuses if s == "met"), "latest": statuses[-1] if statuses else None})
     summary: list[str] = []
     for m in marks:

@@ -1,6 +1,7 @@
 import { api } from "./api";
 import { clear, fmtTime, h } from "./dom";
-import { play, player } from "./player";
+import { drillButton, stopDrill } from "./drill";
+import { play as playAt, player } from "./player";
 import { state } from "./state";
 import { glyphParts, statusChip, statusGlyph, statusTone } from "./status";
 import { exampleButton } from "./takes";
@@ -8,6 +9,10 @@ import { timelineStrip } from "./timeline";
 import type { Analysis, DefineRow, KeyInfo, LineRow, PauseRow, SectionRow } from "./types";
 
 const DIFF_KEY = "taketwo.report.diff";
+
+// The recording this report belongs to: every click plays it, even if a drill or a comparison loaded another.
+let reportUrl = "";
+const play = (at: number | null | undefined) => playAt(at, reportUrl);
 
 function showDiff(): boolean {
   try { return localStorage.getItem(DIFF_KEY) === "1"; } catch { return false; }
@@ -27,6 +32,7 @@ function keyTip(k: KeyInfo): string {
   const parts: string[] = [];
   parts.push(`Rate: ${k.wpm?.toFixed(0) ?? "–"} wpm, ${pct(k.wpm_vs_median_pct)} (${k.median_wpm?.toFixed(0) ?? "–"} wpm). Your mark asks for at least ${k.slower_target_pct}% slower: ${word(k.rate_status)}.`);
   parts.push(`Pause after: ${k.pause_after_s?.toFixed(2) ?? "–"} s against your ${k.pause_after_target_s} s mark: ${word(k.pause_status)}.`);
+  if (k.rate_note) parts.push(k.rate_note);
   return parts.join(" ");
 }
 
@@ -45,7 +51,7 @@ function sectionBars(a: Analysis): HTMLElement {
   const maxS = Math.max(...a.sections.map((s) => Math.max(s.budget_s ?? 0, s.duration_s ?? 0)), 1);
   const total = a.fit_total;
   return h("div", { class: "section-bars" },
-    total?.status === "over" && total.cut ? h("p", { class: "fit-total" }, ...glyphParts("over", "over budget"), total.cut.text) : null,
+    total?.status === "over" && total.cut && a.kind !== "drill" ? h("p", { class: "fit-total" }, ...glyphParts("over", "over budget"), total.cut.text) : null,
     ...a.sections.map((s: SectionRow) => {
       const budgetW = s.budget_s ? (s.budget_s / maxS) * 100 : 0;
       const actualW = s.duration_s ? (s.duration_s / maxS) * 100 : 0;
@@ -63,12 +69,14 @@ function sectionBars(a: Analysis): HTMLElement {
 }
 
 function lineEl(a: Analysis, line: LineRow, diff: boolean): HTMLElement {
+  let el: HTMLElement = h("div");  // replaced below; the Drill button needs a reference to the finished line
   const pauses = a.pauses.filter((p) => p.line === line.index);
   const defines = a.defines.filter((d) => d.line === line.index);
   const emph = (a.emphasis ?? []).filter((e) => e.line === line.index);
   const adlibsAt = (wi: number) => (diff ? (line.adlibs ?? []).filter((x) => x.word_index === wi) : []);
   const parts: (HTMLElement | string)[] = [];
   if (line.is_key && line.key) parts.push(statusChip(line.key.status, "KEY", { tip: keyTip(line.key), extraClass: "key" }));
+  if (line.is_key && canDrill(a)) parts.push(drillButton(a, "line", line.index, `line ${line.index + 1}`, () => el));
   for (const d of defines) parts.push(defineChip(d));
   const pauseAt = (wi: number) => pauses.filter((p) => p.word_index === wi);
   const adlib = (x: { text: string; start: number; repeat: boolean }) => h("span", { class: "adlib", "data-start": String(x.start),
@@ -96,7 +104,7 @@ function lineEl(a: Analysis, line: LineRow, diff: boolean): HTMLElement {
   const meta = line.status === "not_found"
     ? "not found in this take"
     : `${fmtTime(line.start)} – ${fmtTime(line.end)} · ${line.wpm?.toFixed(0) ?? "–"} wpm` + (line.coverage < 1 ? ` · ${Math.round(line.coverage * 100)}% of words matched` : "") + differ;
-  const el = h("div", { class: `line ${line.status === "not_found" ? "not-found" : ""} ${line.is_key ? "is-key" : ""}`, "data-line": String(line.index), "data-start": line.start !== null ? String(line.start) : "" },
+  el = h("div", { class: `line ${line.status === "not_found" ? "not-found" : ""} ${line.is_key ? "is-key" : ""}`, "data-line": String(line.index), "data-start": line.start !== null ? String(line.start) : "" },
     h("div", { class: "line-text" }, ...parts),
     h("div", { class: "line-meta muted small" }, meta));
   el.addEventListener("click", (e) => {
@@ -106,6 +114,23 @@ function lineEl(a: Analysis, line: LineRow, diff: boolean): HTMLElement {
     play(start);
   });
   return el;
+}
+
+/** Drills record one line or section of one of your own full script takes. */
+function canDrill(a: Analysis): boolean {
+  return (a.kind ?? "take") === "take";
+}
+
+/** For a drill: what it was compared with, and one sentence per mark. */
+function drillCard(a: Analysis, openParent: (id: string) => void): HTMLElement | null {
+  if (a.kind !== "drill" || !a.drill) return null;
+  return h("section", { class: "card drill-card" },
+    h("h3", {}, `Drill: ${a.drill.what}`),
+    h("ul", {}, ...(a.drill_summary ?? []).map((t) => h("li", {}, t))),
+    h("p", { class: "muted small" }, a.drill.parent_median_wpm
+      ? `Rates are compared with the median of the full take this drill came from (${a.drill.parent_median_wpm.toFixed(0)} wpm), because one line has no median of its own. The pause after the last line is measured to the end of the recording. `
+      : "The full take this drill came from has no median, so rates are not compared. ",
+      a.drill_of ? h("button", { class: "linklike small", type: "button", onClick: () => openParent(a.drill_of as string) }, "Open the full take") : null));
 }
 
 function pauseChip(p: PauseRow): HTMLElement {
@@ -130,7 +155,9 @@ function summaryCard(a: Analysis): HTMLElement {
   return h("section", { class: "summary" },
     h("ul", {}, ...items.map((s) => h("li", {}, s))),
     h("p", { class: "muted small" },
-      `Your median this take: ${a.baseline.median_wpm?.toFixed(0) ?? "–"} wpm over ${a.baseline.lines_used} lines of ${a.baseline.min_words_per_line}+ words; median pause ${a.baseline.median_pause_s?.toFixed(2) ?? "–"} s. `,
+      a.baseline.median_source && a.baseline.median_source !== "this take"
+        ? `Median from ${a.baseline.median_source}: ${a.baseline.median_wpm?.toFixed(0) ?? "none"} wpm (a drill has no median of its own); median pause in this recording ${a.baseline.median_pause_s?.toFixed(2) ?? "–"} s. `
+        : `Your median this take: ${a.baseline.median_wpm?.toFixed(0) ?? "–"} wpm over ${a.baseline.lines_used} lines of ${a.baseline.min_words_per_line}+ words; median pause ${a.baseline.median_pause_s?.toFixed(2) ?? "–"} s. `,
       `Transcribed ${a.stt.local ? "on this computer" : "by a cloud service"} with ${a.stt.model} (${a.stt.device}); pauses measured with ${a.silence_method}. Click any line or mark to hear it.`));
 }
 
@@ -203,6 +230,7 @@ function transcriptCard(a: Analysis): HTMLElement {
 }
 
 export function renderReport(root: HTMLElement): void {
+  stopDrill();  // a redraw would orphan a drill recording in progress
   clear(root);
   const a = state.analysis;
   if (!a) {
@@ -213,21 +241,24 @@ export function renderReport(root: HTMLElement): void {
     return;
   }
   const p = player();
+  reportUrl = a.audio_url;
   if (!p.src.endsWith(a.audio_url)) p.src = a.audio_url;
 
   const rerender = () => renderReport(root);
   const headStatus = h("p", { class: "small warn", role: "status" });
+  const isDrill = a.kind === "drill";
   const reanalyzeBtn = h("button", { class: "ghost-btn", type: "button", onClick: async () => {
     reanalyzeBtn.setAttribute("disabled", "");
     headStatus.textContent = "";
     try {
-      state.setAnalysis(await api.reanalyze(a.take_id, state.scriptText, state.effectiveSettings()));
+      // A drill keeps its own one-line script; only the settings change.
+      state.setAnalysis(await api.reanalyze(a.take_id, isDrill ? null : state.scriptText, state.effectiveSettings()));
       rerender();
     } catch (err) {
       headStatus.textContent = `Re-analysis failed: ${(err as Error).message}`;
       reanalyzeBtn.removeAttribute("disabled");
     }
-  } }, "Re-analyze with current script and settings") as HTMLButtonElement;
+  } }, isDrill ? "Re-analyze with current settings" : "Re-analyze with current script and settings") as HTMLButtonElement;
 
   // Takes analyzed before the comparison existed have no ad-lib data: say so instead of implying nothing differs.
   const compared = a.lines.some((l) => l.words_differ !== undefined);
@@ -241,10 +272,12 @@ export function renderReport(root: HTMLElement): void {
   });
   const totalDiffer = a.lines.reduce((n, l) => n + (l.words_differ ?? 0), 0);
 
-  const scriptEl = h("div", { class: "script-report" }, ...a.sections.flatMap((s) => [
-    h("h2", { class: "section-head", onClick: () => play(s.start) }, s.name, h("span", { class: "muted small" }, s.budget_label ? ` ${s.budget_label} budget · ${s.duration_label || "not found"} spoken` : ` ${s.duration_label || "not found"} spoken`)),
-    ...a.lines.filter((l) => l.section === s.index).map((l) => lineEl(a, l, diff)),
-  ]));
+  const scriptEl = h("div", { class: "script-report" }, ...a.sections.flatMap((s) => {
+    const head: HTMLElement = h("h2", { class: "section-head", onClick: () => play(s.start) }, s.name,
+      h("span", { class: "muted small" }, s.budget_label ? ` ${s.budget_label} budget · ${s.duration_label || "not found"} spoken` : ` ${s.duration_label || "not found"} spoken`),
+      canDrill(a) && s.line_end > s.line_start ? drillButton(a, "section", s.index, `section ${s.name}`, () => head) : null);
+    return [head, ...a.lines.filter((l) => l.section === s.index).map((l) => lineEl(a, l, diff))];
+  }));
 
   const legend = h("div", { class: "legend muted small" },
     statusChip("met", "met your mark"), statusChip("near", "close"), statusChip("diverged", "diverged"), statusChip("unknown", "not measured"),
@@ -262,6 +295,7 @@ export function renderReport(root: HTMLElement): void {
     headStatus,
     h("section", { class: "card timeline-card" }, tl.el,
       h("p", { class: "muted small" }, "Top band: silences found by the voice-activity detector. Bars: when each script line was spoken (key lines coloured by status). Ticks: where each mark was measured. Click or use ←/→ to hear that moment.")),
+    drillCard(a, async (id) => { state.setTake(await api.getAnyTake(id)); rerender(); }) ?? "",
     summaryCard(a),
     focusCard(a) ?? "",
     h("section", { class: "card" }, h("h3", {}, "Sections: budget vs. spoken"), sectionBars(a)),
@@ -274,6 +308,7 @@ export function renderReport(root: HTMLElement): void {
   );
 
   p.ontimeupdate = () => {
+    if (!p.src.endsWith(a.audio_url)) return;  // another take is playing (a drill try, a comparison cell)
     const t = p.currentTime;
     tl.setTime(t);
     root.querySelectorAll<HTMLElement>(".line").forEach((el) => {

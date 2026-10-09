@@ -51,6 +51,7 @@ export interface FocusItem { mark: string; kind: string; status: string; text: s
 export interface KeyInfo {
   status: Status;
   rate_status: Status;
+  rate_note?: string;
   pause_status: Status;
   wpm: number | null;
   median_wpm: number | null;
@@ -131,11 +132,14 @@ export interface Analysis {
   label: string;
   kind?: "take" | "drill" | "example";
   example?: string;
+  drill_of?: string;
+  drill?: { kind: "line" | "section"; index: number; line_start: number; line_end: number; what: string; parent_median_wpm: number | null };
+  drill_summary?: string[];
   duration_s: number;
   settings: Settings;
   stt: { backend: string; model: string; device: string; local: boolean };
   silence_method: string;
-  baseline: { median_wpm: number | null; lines_used: number; min_words_per_line: number; median_pause_s: number | null; pauses_counted: number };
+  baseline: { median_wpm: number | null; lines_used: number; min_words_per_line: number; median_pause_s: number | null; pauses_counted: number; median_source?: string };
   sections: SectionRow[];
   fit_total?: { status: string; reason?: string; budget_s?: number; spoken_s?: number; delta_s?: number; cut?: CutToFit };
   focus?: { all_met: boolean; items: FocusItem[]; note: string | null };
@@ -239,8 +243,11 @@ export interface CompareMark {
   term?: string;
   text?: string;
   takes: number;
-  statuses: string[];
+  /** One entry per take in takes_info; null where that take does not have the mark. */
+  statuses: (string | null)[];
   values: (number | null)[];
+  /** Per take: [from, to] seconds of the moment to play for this mark. */
+  times?: ([number | null, number | null] | null)[];
   met: number;
   latest: string | null;
 }
@@ -248,7 +255,7 @@ export interface CompareMark {
 export interface CompareResult {
   takes: number;
   take_ids: string[];
-  takes_info: { take_id: string; created_at: string | null; label: string }[];
+  takes_info: { take_id: string; created_at: string | null; label: string; audio_url?: string }[];
   marks: CompareMark[];
   summary: string[];
 }

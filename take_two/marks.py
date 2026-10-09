@@ -221,3 +221,35 @@ def format_budget(seconds: float | None) -> str:
         return ""
     m, s = divmod(int(round(seconds)), 60)
     return f"{m}:{s:02d}"
+
+
+def drill_script(text: str, kind: str, index: int) -> tuple[str, dict]:
+    """The part of a script to drill, as its own small script.
+
+    kind "line": that line under its section's name, without the budget (one line is not
+    a section's worth of time). kind "section": the section header with its budget, and
+    its lines. Raises ValueError for an index that does not exist or a section with no lines.
+    """
+    script = parse_script(text)
+    if kind == "line":
+        if not 0 <= index < len(script.lines):
+            raise ValueError("no such line")
+        ln = script.lines[index]
+        sec = script.sections[ln.section]
+        out = ([f"## {sec.name}"] if sec.name else []) + [ln.raw]
+        info = {"kind": "line", "index": index, "line_start": index, "line_end": index + 1, "section": sec.index,
+                "what": f"line {index + 1}" + (" ([KEY])" if ln.is_key else "")}
+    elif kind == "section":
+        if not 0 <= index < len(script.sections):
+            raise ValueError("no such section")
+        sec = script.sections[index]
+        if sec.line_end <= sec.line_start:
+            raise ValueError("that section has no lines")
+        # Rebuilt rather than copied, so an untitled section keeps the name it has in the full script.
+        header = [f"## {sec.name}" + (f" [{format_budget(sec.budget_s)}]" if sec.budget_s is not None else "")] if sec.name else []
+        out = header + [script.lines[i].raw for i in range(sec.line_start, sec.line_end)]
+        info = {"kind": "section", "index": index, "line_start": sec.line_start, "line_end": sec.line_end,
+                "section": sec.index, "what": f"section {sec.name or index + 1}"}
+    else:
+        raise ValueError("kind must be line or section")
+    return "\n".join(out) + "\n", info

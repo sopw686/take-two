@@ -19,7 +19,7 @@ from take_two import audio as audio_mod
 from take_two import config, takes
 from take_two.analysis import analyze
 from take_two.config import Settings
-from take_two.marks import parse_script
+from take_two.marks import drill_script, parse_script
 from take_two.stt import get_transcriber
 from take_two.stt.base import Transcript
 
@@ -149,7 +149,11 @@ def reanalyze(take_id: str, script_text: str, settings: Settings, label: str | N
         (tdir / "script.md").write_text(script_text, encoding="utf-8")
 
         prev = takes.load_take(take_id) or {}
-        result = analyze(script, transcript, silences, settings, duration)
+        meta = takes.load_meta(take_id)
+        drill = meta.get("drill") if meta.get("kind") == "drill" else None
+        # A drill is one line or section: its rates are judged against the median of the full take it came from.
+        override = {"median_wpm": drill.get("parent_median_wpm"), "source": "your full take"} if drill else None
+        result = analyze(script, transcript, silences, settings, duration, baseline_override=override)
         result.update({
             "take_id": take_id,
             "created_at": prev.get("created_at") or takes.load_meta(take_id)["created_at"],
@@ -175,10 +179,14 @@ def reanalyze(take_id: str, script_text: str, settings: Settings, label: str | N
         if settings.emphasis_enabled:
             from take_two.emphasis import emphasis_report
             result["emphasis"] = emphasis_report(script, result, audio, audio_mod.SR)
+        if drill:
+            result["drill_summary"] = drill_summary(result, drill)
+            # The drill card lists every mark; a whole-talk check or a focus list of one line would only repeat it.
+            result["fit_total"] = {"status": "not_measurable", "reason": "A drill covers one line or section."}
         from take_two.focus import focus
         earlier = [] if result["kind"] != "take" else [
             a for a in takes.same_script(result["script_key"], before=result["created_at"]) if a.get("take_id") != take_id]
-        result["focus"] = focus(result, earlier)
+        result["focus"] = None if drill else focus(result, earlier)
         takes.save_json(tdir / "analysis.json", result)
         return result
 
@@ -194,6 +202,65 @@ def _initial_prompt(settings: Settings) -> str | None:
     if settings.conventions_enabled:
         return "Um, uh, so, you know, like, I mean, we measured the, uh, result."
     return None
+
+
+# ---- Drills ----------------------------------------------------------------------
+
+_RATE = {"met": "met your mark", "near": "close to your mark", "diverged": "diverged from your mark"}
+_PAUSE = {"met": "met your mark", "short": "shorter than your mark", "missing": "no pause found"}
+_SECTION = {"met": "within your budget", "over": "over budget", "under": "under budget"}
+
+
+def drill_summary(result: dict, drill: dict) -> list[str]:
+    """One plain sentence per mark of the drill, judged against the full take's median."""
+    out: list[str] = []
+    median = result["baseline"]["median_wpm"]
+    duration = result.get("duration_s") or 0.0
+    end_note = " (measured to the end of the recording)"
+    for r in result["lines"]:
+        number = drill["line_start"] + r["index"] + 1
+        if r["status"] != "ok":
+            out.append(f"Line {number} was not found in this recording.")
+            continue
+        k = r.get("key")
+        pct = k.get("wpm_vs_median_pct") if k else (
+            (r["wpm"] - median) / median * 100.0 if r.get("wpm") and median else None)
+        if pct is not None:
+            rate = (f"{abs(pct):.0f}% {'slower' if pct < 0 else 'faster'} than your median from the full take "
+                    f"({median:.0f} wpm)" + (f", {_RATE.get(k['rate_status'], k['rate_status'])}" if k else ""))
+        else:
+            rate = "rate not compared (the full take has no median)" if not median else "too few words to measure a rate"
+        who = "This try" if drill.get("kind") == "line" else f"Line {number}" + (" [KEY]" if k else "")
+        text = f"{who}: {rate}"
+        if k and k.get("pause_after_s") is not None:
+            to_end = bool(k.get("pause_window")) and abs(k["pause_window"][1] - duration) < 0.01
+            text += f"; pause after {k['pause_after_s']:.1f} s{end_note if to_end else ''}: {_PAUSE.get(k['pause_status'], k['pause_status'])}"
+        out.append(text + ".")
+    for p in result["pauses"]:
+        if p["status"] == "unmeasurable":
+            continue
+        to_end = p.get("after") is None  # nothing after it in the drill: the window runs to the end of the recording
+        out.append(f"The {p['kind']} after “{p.get('before') or ''}”: {p['measured_s']:.2f} s{end_note if to_end else ''} "
+                   f"against your {p['target_s']} s mark: {_PAUSE.get(p['status'], p['status'])}.")
+    if drill.get("kind") == "section":
+        for sec in result["sections"]:
+            if sec.get("duration_s") is not None and sec.get("budget_s"):
+                out.append(f"Section {sec['name']}: {sec['duration_label']} of its {sec['budget_label']} budget, "
+                           f"{_SECTION.get(sec['status'], sec['status'])}.")
+    return out
+
+
+def create_drill(parent_id: str, upload: bytes, original_name: str, kind: str, index: int, settings: Settings) -> str:
+    """A take of one line or section of the parent's script, linked to the parent and carrying its median."""
+    parent = takes.load_take(parent_id)
+    if parent is None:
+        raise ValueError("the take to drill from has not been analyzed")
+    if parent.get("mode") == "improv" or parent.get("kind", "take") != "take":
+        raise ValueError("drills compare with one of your own full script takes; this take is not one")
+    sub, info = drill_script((takes.take_path(parent_id) / "script.md").read_text(encoding="utf-8"), kind, index)
+    info["parent_median_wpm"] = parent.get("baseline", {}).get("median_wpm")
+    return takes.new_take("script", upload=upload, original_name=original_name, settings=settings.model_dump(),
+                          label=f"Drill: {info['what']}", script=sub, kind="drill", drill_of=parent_id, drill=info)
 
 
 # ---- Example take ----------------------------------------------------------------

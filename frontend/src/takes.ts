@@ -1,5 +1,6 @@
 import { api } from "./api";
 import { clear, fmtTime, h } from "./dom";
+import { playSegment, stopSegment } from "./player";
 import { state } from "./state";
 import { statusChip } from "./status";
 import type { CompareResult, TakeSummary } from "./types";
@@ -10,15 +11,40 @@ function statusWord(s: string): string {
     never_spoken: "not spoken", not_checked: "n/a" } as Record<string, string>)[s] ?? s;
 }
 
+let playing: HTMLButtonElement | null = null;
+
+/** ▶ plays this take at this mark (a little before, to hear the lead-in); ■ stops. One at a time. */
+function playCell(url: string, time: [number | null, number | null] | null | undefined, label: string): HTMLElement | null {
+  const [at, until] = time ?? [null, null];
+  if (at === null || at === undefined) return null;
+  const btn = h("button", { class: "play-cell", type: "button", "aria-label": label, title: label }, "▶") as HTMLButtonElement;
+  const reset = (b: HTMLButtonElement | null) => { if (b) { b.textContent = "▶"; b.classList.remove("on"); } };
+  btn.addEventListener("click", () => {
+    if (playing === btn) {
+      stopSegment();
+      reset(btn);
+      playing = null;
+      return;
+    }
+    reset(playing);
+    playing = btn;
+    btn.textContent = "■";
+    btn.classList.add("on");
+    playSegment(url, Math.max(0, at - 1.2), (until ?? at + 3) + 0.4, () => { if (playing === btn) { reset(btn); playing = null; } });
+  });
+  return btn;
+}
+
 function compareCard(cmp: CompareResult): HTMLElement {
   const takesHead = cmp.takes_info.map((t, i) => h("th", { title: new Date(t.created_at ?? "").toLocaleString() }, t.label || `take ${i + 1}`));
   const rows = cmp.marks.map((m) => {
     const name = m.kind === "KEY" ? `KEY · line ${(m.line ?? 0) + 1}` : m.kind === "section" ? `section ${m.name}` : m.kind === "DEFINE" ? `DEFINE: ${m.term}` : `${m.kind} · line ${(m.line ?? 0) + 1}`;
-    const cells = cmp.takes_info.map((_, i) => {
+    const cells = cmp.takes_info.map((t, i) => {
       const st = m.statuses[i];
       const v = m.values[i];
       const val = v === null || v === undefined ? "" : m.kind === "KEY" ? ` ${v > 0 ? "+" : ""}${Math.round(v)}%` : m.kind === "section" ? ` ${v > 0 ? "+" : ""}${Math.round(v)} s` : ` ${v.toFixed(2)} s`;
-      return h("td", {}, st ? statusChip(st, statusWord(st) + val, { word: statusWord(st) }) : h("span", { class: "muted" }, "–"));
+      return h("td", {}, st ? statusChip(st, statusWord(st) + val, { word: statusWord(st) }) : h("span", { class: "muted" }, "–"),
+        st ? playCell(t.audio_url ?? `/takes/${t.take_id}/audio.wav`, m.times?.[i], `Play ${t.label || `take ${i + 1}`} at ${name}`) : null);
     });
     return h("tr", {}, h("td", { class: "cmp-name" }, name, h("div", { class: "muted small" }, m.text ?? "")), ...cells);
   });
@@ -127,16 +153,20 @@ export async function renderTakes(root: HTMLElement, openReport: () => void): Pr
   if (state.analysis && state.current === "script") {
     if ((state.analysis.kind ?? "take") === "take") {
       api.compare(state.analysis.take_id).then((cmp) => cmpHolder.replaceChildren(compareCard(cmp))).catch(() => undefined);
+    } else if (state.analysis.kind === "drill") {
+      cmpHolder.replaceChildren(h("p", { class: "muted small" }, "The take you have open is a drill (one line or section), so it is not compared with full takes. Open its full take to see the comparison."));
     } else {
       cmpHolder.replaceChildren(h("p", { class: "muted small" }, "The take you have open is the example (a synthetic voice), so it is not compared with your own takes. Record the script yourself to start a comparison."));
     }
   }
   const currentId = state.current === "improv" ? state.improv?.take_id : state.analysis?.take_id;
+  const byId = new Map(takes.map((t) => [t.take_id, t]));
+  const drillsOf = (id: string) => takes.filter((t) => t.kind === "drill" && t.drill_of === id);
   root.append(
     cmpHolder,
     head,
     errLine,
-    h("ul", { class: "take-list" }, ...takes.map((t) => (t.status ?? "done") !== "done" ? unfinishedItem(t, root, openReport) : h("li", { class: currentId === t.take_id ? "current" : "" },
+    h("ul", { class: "take-list" }, ...takes.filter((t) => !(t.kind === "drill" && t.drill_of && byId.has(t.drill_of))).map((t) => (t.status ?? "done") !== "done" ? unfinishedItem(t, root, openReport) : h("li", { class: currentId === t.take_id ? "current" : "" },
       t.mode === "improv" ? h("span", { class: "mode-badge" }, "Improvise") : null,
       t.kind === "example" ? h("span", { class: "mode-badge" }, "Example") : null,
       h("button", { class: "linklike", type: "button", onClick: async () => {
@@ -144,6 +174,13 @@ export async function renderTakes(root: HTMLElement, openReport: () => void): Pr
         openReport();
       } }, takeTitle(t)),
       h("span", { class: "muted small" }, ` ${new Date(t.created_at).toLocaleString()} · ${fmtTime(t.duration_s)}${t.stt?.model ? ` · ${t.stt.model}` : ""}`),
-      h("ul", { class: "small" }, ...(t.summary ?? []).map((s) => h("li", {}, s)))))),
+      h("ul", { class: "small" }, ...(t.summary ?? []).map((s) => h("li", {}, s))),
+      drillsOf(t.take_id).length ? h("ul", { class: "drill-list small" }, ...drillsOf(t.take_id).map((d) => (d.status ?? "done") !== "done" ? unfinishedItem(d, root, openReport) : h("li", {},
+        h("span", { class: "mode-badge" }, "Drill"),
+        h("button", { class: "linklike small", type: "button", onClick: async () => {
+          state.setTake(await api.getAnyTake(d.take_id));
+          openReport();
+        } }, d.label || "Drill"),
+        h("span", { class: "muted" }, ` ${new Date(d.created_at).toLocaleString()}${d.status && d.status !== "done" ? " · not analyzed" : ""}`)))) : null))),
   );
 }

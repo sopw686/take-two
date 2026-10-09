@@ -191,6 +191,26 @@ async def delete_take(take_id: str) -> dict:
     return {"deleted": take_id}
 
 
+async def _new_drill(parent_id: str, audio: UploadFile, kind: str, index: int, settings: str | None) -> tuple[str, Settings]:
+    _take_dir(parent_id)
+    st = _parse_settings(settings)
+    data = await audio.read()
+    if not data:
+        raise HTTPException(400, "the recording is empty")
+    try:
+        return pipeline.create_drill(parent_id, data, audio.filename or "drill.webm", kind, index, st), st
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+
+
+@app.post("/api/takes/{take_id}/drill")
+async def create_drill(take_id: str, audio: UploadFile = File(...), kind: str = Form(...), index: int = Form(...),
+                       settings: str | None = Form(None)) -> dict:
+    """Record one line or section of a take's script; its rates are judged against that take's median."""
+    drill_id, st = await _new_drill(take_id, audio, kind, index, settings)
+    return await process(drill_id, st)
+
+
 class ExampleBody(BaseModel):
     settings: Settings = Settings()
 
@@ -224,6 +244,8 @@ async def reanalyze_take(take_id: str, body: ReanalyzeBody) -> dict:
     if takes.is_busy(take_id):
         raise HTTPException(409, "this take is being analyzed right now")
     _reject_improv(take_id)
+    if body.script is not None and takes.load_meta(take_id).get("kind") == "drill":
+        raise HTTPException(400, "a drill keeps its own one-line script; re-analyze the full take instead")
     script = body.script
     if script is None:
         p = tdir / "script.md"
@@ -294,7 +316,8 @@ async def compare(take_id: str) -> dict:
     if not group:
         raise HTTPException(404, "take not found")
     result = compare_takes(group)
-    result["takes_info"] = [{"take_id": a["take_id"], "created_at": a.get("created_at"), "label": a.get("label", "")} for a in group]
+    result["takes_info"] = [{"take_id": a["take_id"], "created_at": a.get("created_at"), "label": a.get("label", ""),
+                             "audio_url": a.get("audio_url") or f"/takes/{a['take_id']}/audio.wav"} for a in group]
     return result
 
 
@@ -335,6 +358,13 @@ async def create_improv_job(audio: UploadFile = File(...), topic: str = Form(...
 @app.post("/api/jobs/retry/{take_id}")
 async def retry_job(take_id: str, body: RetryBody | None = None) -> dict:
     return _start_job(take_id, _prepare_retry(take_id, body))
+
+
+@app.post("/api/jobs/drill/{take_id}")
+async def drill_job(take_id: str, audio: UploadFile = File(...), kind: str = Form(...), index: int = Form(...),
+                    settings: str | None = Form(None)) -> dict:
+    drill_id, st = await _new_drill(take_id, audio, kind, index, settings)
+    return _start_job(drill_id, st)
 
 
 @app.get("/api/jobs/{take_id}")
