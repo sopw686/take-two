@@ -1,0 +1,5 @@
+{
+ "synthetic": true,
+ "speaker": "Windows text-to-speech voice (synthetic), built by tests/fixtures/make_fixture.py",
+ "labels": "The generator's own timings and planted statuses from tests/fixtures/fixture_truth.json, not a human labeller. Pauses are the silences the generator inserted."
+}

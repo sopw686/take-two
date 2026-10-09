@@ -1,0 +1,10 @@
+mark,status
+KEY:L6,diverged
+KEY:L8,met
+/:L3:W4,missing
+//:L6:W8,met
+/:L8:W5,short
+section:Opening,met
+section:Methods,over
+section:Results,met
+DEFINE:degree heating weeks,defined

@@ -1,0 +1,625 @@
+{
+ "text": "Good morning, and thank you for having me. Today I will talk about how we measured heat stress on coral reefs. We used 20 years of satellite temperature records. For each reef we computed degree heating weeks, which is the accumulated heat above the summer maximum. We then trained a model on reef depth and heat stress. The model predicted leaching three weeks in advance. This is two weeks earlier than the current warning system. The errors were not random. They clustered on deep reefs. Thanks. Thank you.",
+ "words": [
+  {
+   "i": 0,
+   "text": "Good",
+   "start": 0.0,
+   "end": 0.2,
+   "prob": 0.74609375
+  },
+  {
+   "i": 1,
+   "text": "morning,",
+   "start": 0.2,
+   "end": 0.48,
+   "prob": 0.92822265625
+  },
+  {
+   "i": 2,
+   "text": "and",
+   "start": 0.96,
+   "end": 1.24,
+   "prob": 0.98974609375
+  },
+  {
+   "i": 3,
+   "text": "thank",
+   "start": 1.24,
+   "end": 1.44,
+   "prob": 0.96728515625
+  },
+  {
+   "i": 4,
+   "text": "you",
+   "start": 1.44,
+   "end": 1.66,
+   "prob": 0.9970703125
+  },
+  {
+   "i": 5,
+   "text": "for",
+   "start": 1.66,
+   "end": 1.84,
+   "prob": 0.9990234375
+  },
+  {
+   "i": 6,
+   "text": "having",
+   "start": 1.84,
+   "end": 2.1,
+   "prob": 0.9990234375
+  },
+  {
+   "i": 7,
+   "text": "me.",
+   "start": 2.1,
+   "end": 2.42,
+   "prob": 0.99951171875
+  },
+  {
+   "i": 8,
+   "text": "Today",
+   "start": 3.05,
+   "end": 3.25,
+   "prob": 0.97412109375
+  },
+  {
+   "i": 9,
+   "text": "I",
+   "start": 3.25,
+   "end": 3.47,
+   "prob": 0.9638671875
+  },
+  {
+   "i": 10,
+   "text": "will",
+   "start": 3.47,
+   "end": 3.65,
+   "prob": 0.9951171875
+  },
+  {
+   "i": 11,
+   "text": "talk",
+   "start": 3.65,
+   "end": 3.89,
+   "prob": 0.99853515625
+  },
+  {
+   "i": 12,
+   "text": "about",
+   "start": 3.89,
+   "end": 4.21,
+   "prob": 0.99853515625
+  },
+  {
+   "i": 13,
+   "text": "how",
+   "start": 4.21,
+   "end": 4.41,
+   "prob": 0.95361328125
+  },
+  {
+   "i": 14,
+   "text": "we",
+   "start": 4.41,
+   "end": 4.63,
+   "prob": 0.9931640625
+  },
+  {
+   "i": 15,
+   "text": "measured",
+   "start": 4.63,
+   "end": 4.91,
+   "prob": 0.99462890625
+  },
+  {
+   "i": 16,
+   "text": "heat",
+   "start": 4.91,
+   "end": 5.17,
+   "prob": 0.9873046875
+  },
+  {
+   "i": 17,
+   "text": "stress",
+   "start": 5.17,
+   "end": 5.53,
+   "prob": 0.990234375
+  },
+  {
+   "i": 18,
+   "text": "on",
+   "start": 5.53,
+   "end": 5.77,
+   "prob": 0.99658203125
+  },
+  {
+   "i": 19,
+   "text": "coral",
+   "start": 5.77,
+   "end": 6.09,
+   "prob": 0.962890625
+  },
+  {
+   "i": 20,
+   "text": "reefs.",
+   "start": 6.09,
+   "end": 6.45,
+   "prob": 0.998046875
+  },
+  {
+   "i": 21,
+   "text": "We",
+   "start": 7.27,
+   "end": 7.35,
+   "prob": 0.98583984375
+  },
+  {
+   "i": 22,
+   "text": "used",
+   "start": 7.35,
+   "end": 7.63,
+   "prob": 0.97802734375
+  },
+  {
+   "i": 23,
+   "text": "20",
+   "start": 7.63,
+   "end": 8.01,
+   "prob": 0.93798828125
+  },
+  {
+   "i": 24,
+   "text": "years",
+   "start": 8.01,
+   "end": 8.27,
+   "prob": 0.9931640625
+  },
+  {
+   "i": 25,
+   "text": "of",
+   "start": 8.27,
+   "end": 8.51,
+   "prob": 0.9990234375
+  },
+  {
+   "i": 26,
+   "text": "satellite",
+   "start": 8.51,
+   "end": 8.97,
+   "prob": 0.9951171875
+  },
+  {
+   "i": 27,
+   "text": "temperature",
+   "start": 8.97,
+   "end": 9.47,
+   "prob": 0.99462890625
+  },
+  {
+   "i": 28,
+   "text": "records.",
+   "start": 9.47,
+   "end": 10.05,
+   "prob": 0.99560546875
+  },
+  {
+   "i": 29,
+   "text": "For",
+   "start": 10.67,
+   "end": 10.89,
+   "prob": 0.98779296875
+  },
+  {
+   "i": 30,
+   "text": "each",
+   "start": 10.89,
+   "end": 11.09,
+   "prob": 0.99951171875
+  },
+  {
+   "i": 31,
+   "text": "reef",
+   "start": 11.09,
+   "end": 11.33,
+   "prob": 0.9951171875
+  },
+  {
+   "i": 32,
+   "text": "we",
+   "start": 11.33,
+   "end": 11.55,
+   "prob": 0.962890625
+  },
+  {
+   "i": 33,
+   "text": "computed",
+   "start": 11.55,
+   "end": 11.95,
+   "prob": 0.9951171875
+  },
+  {
+   "i": 34,
+   "text": "degree",
+   "start": 11.95,
+   "end": 12.35,
+   "prob": 0.89990234375
+  },
+  {
+   "i": 35,
+   "text": "heating",
+   "start": 12.35,
+   "end": 12.61,
+   "prob": 0.9677734375
+  },
+  {
+   "i": 36,
+   "text": "weeks,",
+   "start": 12.61,
+   "end": 13.01,
+   "prob": 0.99365234375
+  },
+  {
+   "i": 37,
+   "text": "which",
+   "start": 13.41,
+   "end": 13.65,
+   "prob": 0.9970703125
+  },
+  {
+   "i": 38,
+   "text": "is",
+   "start": 13.65,
+   "end": 13.81,
+   "prob": 0.998046875
+  },
+  {
+   "i": 39,
+   "text": "the",
+   "start": 13.81,
+   "end": 13.97,
+   "prob": 0.9990234375
+  },
+  {
+   "i": 40,
+   "text": "accumulated",
+   "start": 13.97,
+   "end": 14.51,
+   "prob": 0.9970703125
+  },
+  {
+   "i": 41,
+   "text": "heat",
+   "start": 14.51,
+   "end": 14.85,
+   "prob": 0.9990234375
+  },
+  {
+   "i": 42,
+   "text": "above",
+   "start": 14.85,
+   "end": 15.11,
+   "prob": 0.998046875
+  },
+  {
+   "i": 43,
+   "text": "the",
+   "start": 15.11,
+   "end": 15.31,
+   "prob": 0.99951171875
+  },
+  {
+   "i": 44,
+   "text": "summer",
+   "start": 15.31,
+   "end": 15.55,
+   "prob": 0.9794921875
+  },
+  {
+   "i": 45,
+   "text": "maximum.",
+   "start": 15.55,
+   "end": 16.03,
+   "prob": 0.9970703125
+  },
+  {
+   "i": 46,
+   "text": "We",
+   "start": 16.76,
+   "end": 16.88,
+   "prob": 0.99169921875
+  },
+  {
+   "i": 47,
+   "text": "then",
+   "start": 16.88,
+   "end": 17.08,
+   "prob": 0.9990234375
+  },
+  {
+   "i": 48,
+   "text": "trained",
+   "start": 17.08,
+   "end": 17.4,
+   "prob": 0.99853515625
+  },
+  {
+   "i": 49,
+   "text": "a",
+   "start": 17.4,
+   "end": 17.58,
+   "prob": 0.99658203125
+  },
+  {
+   "i": 50,
+   "text": "model",
+   "start": 17.58,
+   "end": 17.78,
+   "prob": 0.99853515625
+  },
+  {
+   "i": 51,
+   "text": "on",
+   "start": 17.78,
+   "end": 18.06,
+   "prob": 0.99853515625
+  },
+  {
+   "i": 52,
+   "text": "reef",
+   "start": 18.06,
+   "end": 18.3,
+   "prob": 0.97119140625
+  },
+  {
+   "i": 53,
+   "text": "depth",
+   "start": 18.3,
+   "end": 18.56,
+   "prob": 0.998046875
+  },
+  {
+   "i": 54,
+   "text": "and",
+   "start": 18.56,
+   "end": 18.76,
+   "prob": 0.99658203125
+  },
+  {
+   "i": 55,
+   "text": "heat",
+   "start": 18.76,
+   "end": 18.94,
+   "prob": 0.9990234375
+  },
+  {
+   "i": 56,
+   "text": "stress.",
+   "start": 18.94,
+   "end": 19.42,
+   "prob": 0.9990234375
+  },
+  {
+   "i": 57,
+   "text": "The",
+   "start": 20.08,
+   "end": 20.24,
+   "prob": 0.76904296875
+  },
+  {
+   "i": 58,
+   "text": "model",
+   "start": 20.24,
+   "end": 20.44,
+   "prob": 0.998046875
+  },
+  {
+   "i": 59,
+   "text": "predicted",
+   "start": 20.44,
+   "end": 20.8,
+   "prob": 0.98388671875
+  },
+  {
+   "i": 60,
+   "text": "leaching",
+   "start": 20.8,
+   "end": 21.14,
+   "prob": 0.5675048828125
+  },
+  {
+   "i": 61,
+   "text": "three",
+   "start": 21.14,
+   "end": 21.38,
+   "prob": 0.68505859375
+  },
+  {
+   "i": 62,
+   "text": "weeks",
+   "start": 21.38,
+   "end": 21.58,
+   "prob": 0.99267578125
+  },
+  {
+   "i": 63,
+   "text": "in",
+   "start": 21.58,
+   "end": 21.74,
+   "prob": 0.9873046875
+  },
+  {
+   "i": 64,
+   "text": "advance.",
+   "start": 21.74,
+   "end": 22.0,
+   "prob": 0.88330078125
+  },
+  {
+   "i": 65,
+   "text": "This",
+   "start": 23.87,
+   "end": 23.99,
+   "prob": 0.98583984375
+  },
+  {
+   "i": 66,
+   "text": "is",
+   "start": 23.99,
+   "end": 24.17,
+   "prob": 0.9990234375
+  },
+  {
+   "i": 67,
+   "text": "two",
+   "start": 24.17,
+   "end": 24.39,
+   "prob": 0.888671875
+  },
+  {
+   "i": 68,
+   "text": "weeks",
+   "start": 24.39,
+   "end": 24.65,
+   "prob": 0.99951171875
+  },
+  {
+   "i": 69,
+   "text": "earlier",
+   "start": 24.65,
+   "end": 25.01,
+   "prob": 0.9990234375
+  },
+  {
+   "i": 70,
+   "text": "than",
+   "start": 25.01,
+   "end": 25.29,
+   "prob": 0.99267578125
+  },
+  {
+   "i": 71,
+   "text": "the",
+   "start": 25.29,
+   "end": 25.45,
+   "prob": 0.9990234375
+  },
+  {
+   "i": 72,
+   "text": "current",
+   "start": 25.45,
+   "end": 25.77,
+   "prob": 0.9970703125
+  },
+  {
+   "i": 73,
+   "text": "warning",
+   "start": 25.77,
+   "end": 26.07,
+   "prob": 0.9873046875
+  },
+  {
+   "i": 74,
+   "text": "system.",
+   "start": 26.07,
+   "end": 26.59,
+   "prob": 0.9990234375
+  },
+  {
+   "i": 75,
+   "text": "The",
+   "start": 27.22,
+   "end": 27.42,
+   "prob": 0.99609375
+  },
+  {
+   "i": 76,
+   "text": "errors",
+   "start": 27.42,
+   "end": 27.76,
+   "prob": 0.99853515625
+  },
+  {
+   "i": 77,
+   "text": "were",
+   "start": 27.76,
+   "end": 28.08,
+   "prob": 0.9970703125
+  },
+  {
+   "i": 78,
+   "text": "not",
+   "start": 28.08,
+   "end": 28.34,
+   "prob": 0.99951171875
+  },
+  {
+   "i": 79,
+   "text": "random.",
+   "start": 28.34,
+   "end": 28.86,
+   "prob": 0.99853515625
+  },
+  {
+   "i": 80,
+   "text": "They",
+   "start": 29.32,
+   "end": 29.52,
+   "prob": 0.9912109375
+  },
+  {
+   "i": 81,
+   "text": "clustered",
+   "start": 29.52,
+   "end": 29.98,
+   "prob": 0.99658203125
+  },
+  {
+   "i": 82,
+   "text": "on",
+   "start": 29.98,
+   "end": 30.34,
+   "prob": 0.998046875
+  },
+  {
+   "i": 83,
+   "text": "deep",
+   "start": 30.34,
+   "end": 30.58,
+   "prob": 0.93115234375
+  },
+  {
+   "i": 84,
+   "text": "reefs.",
+   "start": 30.58,
+   "end": 31.06,
+   "prob": 0.9931640625
+  },
+  {
+   "i": 85,
+   "text": "Thanks.",
+   "start": 31.06,
+   "end": 31.18,
+   "prob": 0.5107421875
+  },
+  {
+   "i": 86,
+   "text": "Thank",
+   "start": 32.28,
+   "end": 32.54,
+   "prob": 0.9775390625
+  },
+  {
+   "i": 87,
+   "text": "you.",
+   "start": 32.54,
+   "end": 32.78,
+   "prob": 0.958984375
+  }
+ ],
+ "backend": "faster-whisper",
+ "model": "small.en",
+ "device": "cuda/float16",
+ "duration_s": 33.7049375
+}
