@@ -1,11 +1,14 @@
 # Take Two
 
-**A rehearsal coach for science talks that checks your delivery against your own marks, not a universal standard.**
+**A rehearsal coach for anyone who needs to land an idea out loud. It checks your delivery against your own marks, not a universal standard.**
 
-Tools like PowerPoint Speaker Coach and Yoodli grade everyone against the same idea of a good speaker. They can't tell a deliberate pause after your main result from losing your place. With Take Two you mark up the script the way a performer marks a poem (slow down here, pause here, define this term aloud), rehearse out loud, and get a report showing line by line where the take met or diverged from what *you* intended. There is no overall score.
+> One-page writeup: [WRITEUP.md](WRITEUP.md)
 
+You mark up the script the way a performer marks a poem (slow down here, pause here, explain this aloud), rehearse out loud, and get a report showing line by line where the take met or diverged from what *you* intended. There is no overall score. The same few marks cover talks, toasts, poems and pitches: `[KEY]` for the line that has to land, `/` and `//` for the pauses you mean, `[DEFINE: term]` for anything your audience may not know, and section time budgets.
+
+- **Measured, not judged:** every mark comes back as met, close to, or diverged from *your* mark, with the number behind it and the moment a click away.
 - **Local-first:** speech-to-text (faster-whisper) and pause detection (Silero VAD) run on your machine. Audio leaves it only if you add a cloud key, and the UI says so.
-- **Optional LLM features** (Claude): suggest marks, check whether jargon was defined, coaching notes. The model sees text and numbers, never audio, and code verifies its output (e.g. quotes not found in the transcript are dropped).
+- **Optional LLM features** (Claude): suggest marks, check whether a `[DEFINE]` term was explained, coaching notes. The model sees text and numbers, never audio, and code verifies its output (e.g. quotes not found in the transcript are dropped).
 - **Stack:** Python / FastAPI backend, TypeScript / Vite frontend. 295 unit tests, a synthetic recording with known ground truth, and a browser test that records through Chrome's fake microphone.
 
 ## Quick start
@@ -24,20 +27,9 @@ Requires [uv](https://docs.astral.sh/uv/) and Node 18+ (one-time frontend build)
 
 Then open <http://127.0.0.1:8765>. The first run installs the Python environment, builds the frontend, and downloads the `small.en` speech model (~500 MB).
 
-**Fastest way to see it working (no microphone, no model, no key):** open the **Report** tab and click **Load example take**. It loads a synthetic-voice take of a short coral-reef script, analyzed instantly from a committed transcript.
+**No microphone, model or key needed:** open the **Report** tab and click **Load example take** to see a full report from a synthetic-voice take.
 
-**To try it yourself:** paste `sample_script.md` (or `demo_speech.md`) into the Script tab, or import the speaker notes of a PowerPoint deck, go to Rehearse, record, and read the report. On the first visit, a one-minute tour on the Script tab points at a key line and a pause in the script itself.
-
-## Where to look
-
-| If you want... | Read |
-|---|---|
-| The one-page summary | [WRITEUP.md](WRITEUP.md) |
-| Why it's designed this way | [DECISIONS.md](DECISIONS.md) |
-| What is tested, checked by hand, and weak | [TESTING.md](TESTING.md) |
-| How the measurements compare with labelled recordings | [eval/README.md](eval/README.md), results in [eval/RESULTS.md](eval/RESULTS.md) (synthetic voice only so far) |
-| A demo walkthrough | [DEMO.md](DEMO.md) (script: [demo_speech.md](demo_speech.md)) |
-| The pitch outline | [PITCH.md](PITCH.md) |
+**To try it yourself:** on the Script tab, **Start from an example**, paste your own script, or import the speaker notes of a PowerPoint deck; then go to Rehearse, record, and read the report.
 
 ## Run the tests
 
@@ -47,6 +39,8 @@ uv run pytest -m slow    # synthetic fixture through real local speech-to-text
 uv run pytest -m browser # record, stop and read the report in Chrome with a fake microphone (needs Google Chrome, ~90 s)
 uv run python -m eval.run   # evaluation against labelled recordings -> eval/RESULTS.md (see eval/README.md)
 ```
+
+More detail: [TESTING.md](TESTING.md), [DECISIONS.md](DECISIONS.md), [eval/README.md](eval/README.md).
 
 ---
 
@@ -60,7 +54,7 @@ uv run python -m eval.run   # evaluation against labelled recordings -> eval/RES
 | `[KEY]` at the start of a line | Key line: slower than your median, then a pause | Line rate vs. your median line rate in this take (a drill uses its full take's median; a paraphrased line is not rate-checked); silence after the line |
 | `word / word` | Deliberate short pause (default ≥ 0.7 s) | Silence at that point (voice-activity detector) |
 | `word // word` | Deliberate long pause (default ≥ 1.5 s) | Same |
-| `[DEFINE: term]` | The term must be explained aloud at or before its first use | Where the term was first spoken and whether a definition precedes it |
+| `[DEFINE: term]` | A term your audience may not know (technical term, in-joke, reference) must be explained aloud at or before its first use | Where the term was first spoken and whether a definition precedes it |
 | `*word*` | Emphasis (experimental, off by default) | Loudness and pitch of the word vs. the rest of its line |
 
 All thresholds are yours to change in **Settings**. Wording in the report is "met your mark" / "diverged from your mark"; there is no score.
@@ -110,7 +104,7 @@ A second mode with no script and no marks: pick a topic (shuffle a built-in list
 
 Every measure is compared with a **reference band you can edit** in Settings → *Improvise reference bands*; there is no overall score. The transcript is shown with fillers, hedges, restarts, unclear words, hesitations, and rising or fading endings marked in place; click any word to hear it. Up to three practice drills are written by the app from your numbers, with no model involved.
 
-**Questions about my script (defense Q&A).** Instead of a topic, practise the questions after your talk: with an API key, the model reads the script on your Script tab and proposes five to eight likely audience questions, each tagged (clarification, methods challenge, limitation, implication) and tied to a script line; code drops any it cannot check. Or type a question you expect (no key needed). Your answer is an Improvise take on that question, and the content review adds "Answered the question", backed by a quote from your answer.
+**Questions about my script (Q&A practice).** Instead of a topic, practise the questions that follow a talk, a defense, a pitch or an interview: with an API key, the model reads the script on your Script tab and proposes five to eight likely audience questions, each tagged (clarification, methods challenge, limitation, implication) and tied to a script line; code drops any it cannot check. Or type a question you expect (no key needed). Your answer is an Improvise take on that question, and the content review adds "Answered the question", backed by a quote from your answer.
 
 Before recording, choose **Delivery only** (fully local) or **Delivery + content**. With an API key, content mode also asks the model to review the hook, staying on topic, suspense and the ending from the transcript text; every judgement must quote your words, and code drops any quote it cannot find. The model also proposes one more gripping opening line. Improvise takes appear in Takes with a badge, and the report shows your recent Improvise numbers side by side.
 
@@ -134,8 +128,20 @@ tests/            unit tests + a synthetic TTS fixture with known ground truth (
 takes/            your recordings and analyses, one folder per take (not committed)
 examples/         the example take (synthetic voice, script, committed transcript)
 eval/             evaluation harness: labelled recordings, eval.run -> RESULTS.md, eval.retest (noise floor)
-sample_script.md  a placeholder talk to try the marks on
+sample_script.md  a placeholder science talk to try the marks on
+examples/scripts/ a wedding toast and a slam poem (offered under "Start from an example")
 ```
+
+## How it differs from other tools
+
+Speech coaches like PowerPoint Speaker Coach, Yoodli and Orai grade everyone against one idea of a good speaker: even pace, no dead air. But a deliberate pause is the point of a toast's punchline, a poem's line break, or the sentence a talk exists to deliver, and a coach that rewards even pace cannot tell that pause from losing your place. Take Two measures against the marks you wrote, so the same take can be right for a slam poem and wrong for a conference talk.
+
+What "landing it" means, by kind of speech:
+
+- **Technical and academic talks:** the key result said slower than the rest and followed by silence, every unfamiliar term explained before it is used, and methods kept inside their time.
+- **Celebratory speeches:** the pause after the punchline, and a sincere last line that isn't rushed.
+- **Performance poetry and slam:** the breath at each line break, and the drop before the last line.
+- **Pitches and interviews:** the number and the ask said slowly enough to be heard, inside a hard time limit.
 
 ## Known limitations
 
