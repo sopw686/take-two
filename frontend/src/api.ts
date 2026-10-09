@@ -1,4 +1,4 @@
-import type { Analysis, CompareResult, Health, ImprovAnalysis, JobStatus, Settings, SuggestResponse, TakeSummary, Topic } from "./types";
+import type { Analysis, CompareResult, Health, ImprovAnalysis, JobStatus, Question, QuestionsResponse, Settings, SuggestResponse, TakeSummary, Topic } from "./types";
 
 /** A failed request. takeId is set when the server kept a take folder that can be retried. */
 export class ApiError extends Error {
@@ -103,9 +103,12 @@ export const api = {
   /** Background analysis with progress: these return at once with the job; poll job(takeId). */
   startTakeJob: (audio: Blob, filename: string, script: string, settings: Settings, label = "") =>
     fetch("/api/jobs/takes", { method: "POST", body: takeForm(audio, filename, { script, label }, settings) }).then((r) => j<JobStatus>(r)),
-  startImprovJob: (audio: Blob, filename: string, topic: string, goalS: number | null, content: boolean, settings: Settings, label = "") =>
+  startImprovJob: (audio: Blob, filename: string, topic: string, goalS: number | null, content: boolean, settings: Settings, label = "",
+    question: Question | null = null) =>
     fetch("/api/jobs/improv", { method: "POST", body: takeForm(audio, filename,
-      { topic, content: String(content), label, ...(goalS !== null ? { goal_s: String(goalS) } : {}) }, settings) }).then((r) => j<JobStatus>(r)),
+      { topic, content: String(content), label, ...(goalS !== null ? { goal_s: String(goalS) } : {}),
+        ...(question ? { question: JSON.stringify(question) } : {}) }, settings) }).then((r) => j<JobStatus>(r)),
+  improvQuestions: (script: string) => post("/api/improv/questions", { script }).then((r) => j<QuestionsResponse>(r)),
   startDrillJob: (parentId: string, audio: Blob, filename: string, kind: "line" | "section", index: number, settings: Settings) =>
     fetch(`/api/jobs/drill/${parentId}`, { method: "POST", body: takeForm(audio, filename, { kind, index: String(index) }, settings) })
       .then((r) => j<JobStatus>(r)),

@@ -40,6 +40,30 @@ def _improv_take(take_id: str) -> dict:
     return data
 
 
+class QuestionsBody(BaseModel):
+    script: str
+
+
+@router.post("/questions")
+async def questions(body: QuestionsBody) -> dict:
+    """Likely audience questions about the script (model reads the script text only)."""
+    from take_two.llm import get_llm, llm_status
+    from take_two.marks import parse_script
+    from take_two.questions import SYSTEM, QuestionsOutput, build_user_prompt, validate_questions
+
+    llm = get_llm()
+    if not llm.available:
+        return {"available": False, "reason": llm_status()["reason"], "questions": [], "dropped": []}
+    script = parse_script(body.script.replace("\r\n", "\n"))
+    if not script.lines:
+        return {"available": True, "reason": "The script is empty.", "questions": [], "dropped": []}
+    out = await run_in_threadpool(llm.complete_structured, SYSTEM, build_user_prompt(script), QuestionsOutput)
+    if out is None:
+        return {"available": True, "reason": "The model did not return usable questions. Try again.", "questions": [], "dropped": []}
+    kept, dropped = validate_questions(out, script)
+    return {"available": True, "questions": kept, "dropped": dropped, "proposed": len(out.questions)}
+
+
 @router.get("/topics")
 async def topics() -> dict:
     from take_two.topics import CATEGORIES, TOPICS
@@ -61,27 +85,51 @@ def check_goal(goal_s: float | None) -> float | None:
     return goal_s
 
 
+def parse_question(raw: str | None, topic: str) -> dict | None:
+    """The question this take answers ({text, tag, line_index, line_text}), when it came from a script.
+
+    The topic is the question text; tag and line are kept for the report. A typed question
+    has no tag or line.
+    """
+    if not raw:
+        return None
+    try:
+        q = json.loads(raw)
+    except ValueError:
+        raise HTTPException(400, "bad question")
+    if not isinstance(q, dict):
+        raise HTTPException(400, "bad question")
+    from take_two.questions import TAGS
+    tag = q.get("tag") if q.get("tag") in TAGS else None
+    li = q.get("line_index")
+    line = li if isinstance(li, int) and not isinstance(li, bool) and li >= 0 else None
+    line_text = str(q.get("line_text") or "")[:300] if line is not None else ""
+    return {"text": topic, "tag": tag, "line_index": line, "line_text": line_text}
+
+
 async def new_improv_take(audio: UploadFile, topic: str, goal_s: float | None, content: bool, settings: str | None,
-                          label: str) -> tuple[str, Settings]:
+                          label: str, question: str | None = None) -> tuple[str, Settings]:
     """Validate an Improvise take and create its folder (upload, topic, settings) before any processing."""
     st = _settings(settings)
     topic = clean_topic(topic)
     check_goal(goal_s)
+    q = parse_question(question, topic)
     data = await audio.read()
     if not data:
         raise HTTPException(400, "the recording is empty")
     take_id = takes.new_take("improv", upload=data, original_name=audio.filename or "take.webm",
                              settings=st.model_dump(), label=label,
-                             improv={"topic": topic, "goal_s": goal_s, "content": content})
+                             improv={"topic": topic, "goal_s": goal_s, "content": content, "question": q})
     return take_id, st
 
 
 @router.post("")
 async def create(audio: UploadFile = File(...), topic: str = Form(...), goal_s: float | None = Form(None),
-                 content: bool = Form(False), settings: str | None = Form(None), label: str = Form("")) -> dict:
+                 content: bool = Form(False), settings: str | None = Form(None), label: str = Form(""),
+                 question: str | None = Form(None)) -> dict:
     from take_two.app import process
 
-    take_id, st = await new_improv_take(audio, topic, goal_s, content, settings, label)
+    take_id, st = await new_improv_take(audio, topic, goal_s, content, settings, label, question)
     return await process(take_id, st)
 
 

@@ -43,7 +43,7 @@ function render(): void {
     case "rehearse": renderRehearse(main, () => go("report")); break;
     case "improvise": void renderImprovise(main, () => go("report")); break;
     case "report":
-      if (state.current === "improv" && state.improv) renderImprovReport(main, (topic) => { presetTopic(topic); go("improvise"); });
+      if (state.current === "improv" && state.improv) renderImprovReport(main, (topic, question) => { presetTopic(topic, question); go("improvise"); });
       else renderReport(main);
       break;
     case "takes": void renderTakes(main, () => go("report")); break;

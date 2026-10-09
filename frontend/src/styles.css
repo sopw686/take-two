@@ -341,3 +341,9 @@ button.mark.pause { font-size: 14px; }
 .said { font-family: var(--sans); color: var(--ink); margin: 2px 0; }
 .w.misheard { text-decoration: underline dotted var(--accent); text-underline-offset: 4px; }
 .tl-line.tl-para { opacity: 0.35; stroke: var(--unk); stroke-dasharray: 3 2; }
+
+/* Improvise: questions about my script */
+.source-chips { margin: 0 0 10px; }
+.question-list { grid-template-columns: 1fr; }
+.question-list label span { font-family: var(--serif); font-size: 16px; }
+.questions-panel .toolbar { margin: 6px 0; }

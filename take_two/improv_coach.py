@@ -44,11 +44,20 @@ class ContentReview(BaseModel):
     rewrite_opening: str = Field(description="One alternative opening sentence for this same speech, more gripping, at most 30 words.")
 
 
+class QAContentReview(ContentReview):
+    answered: ContentItem = Field(description="Did the speech answer the question that was asked? Quote the exact words that answer it, or that talk around it.")
+
+
 SYSTEM_DELIVERY = """You are a speaking coach for unscripted, improvised speech. You receive measurements of one take (never audio): pace, filler words, hesitations, hedging phrases, statements that ended with rising pitch (uptalk) or faded out, words the recognizer could not catch clearly, and vocal variety (pitch range, loudness variation, pace variation, pauses between sentences, opening energy). Each measure has a reference band the speaker can edit, and a status: met, near or diverged.
 
 Write at most three suggestions, most useful first, focusing on measures that diverged. Each must cite a specific number from the data and give one concrete way to practise it. Aim for confident, engaging delivery in the style of good online video speakers: a strong opening, varied pitch and pace, deliberate pauses before key points, and statements that land with a falling pitch. Use plain, encouraging wording. Never invent a measure that is not in the data, never give an overall grade or score, and do not claim to know how the take sounded beyond the numbers. If earlier takes are included, mention a trend only when the numbers show one."""
 
 SYSTEM_CONTENT = """You review the transcript of an improvised speech on a given topic. Judge four things: the hook (do the first sentences make people want to keep listening?), whether it stays on topic, suspense (an open question, a tease, a contrast or a build-up that pays off), and the ending (a clear closing line, not trailing off). For each, give a verdict (strong, present, weak or missing), one specific sentence of feedback, and quote the exact transcript words your judgement rests on, copied verbatim. Leave the quote empty only when something is missing entirely. Then write one alternative opening sentence for the same speech that would hook a listener the way good short-form video speakers do. Filler words in the transcript are part of the recording; do not comment on them here."""
+
+SYSTEM_QA = (SYSTEM_CONTENT + " The speech is the speaker's answer to an audience question, given as the topic. Also judge "
+             "whether it answered that question: a direct answer early is strong, answering a different question or "
+             "only circling it is weak or missing. Quote the transcript words your judgement rests on even when the "
+             "verdict is weak or missing (the words that circle the question).")
 
 _NUM = re.compile(r"\d")
 MAX_OPENING_WORDS = 30
@@ -107,11 +116,15 @@ def validate_content(out: ContentReview | None, transcript: Transcript) -> dict:
         return {"available": True, "reason": "The model did not return a usable review.", "items": []}
     flat = _Flat(transcript)
     items, dropped = [], []
-    for key, label in (("hook", "Hook"), ("on_topic", "On topic"), ("suspense", "Suspense"), ("ending", "Ending")):
+    criteria = [("hook", "Hook"), ("on_topic", "On topic"), ("suspense", "Suspense"), ("ending", "Ending")]
+    if isinstance(out, QAContentReview):
+        criteria.insert(0, ("answered", "Answered the question"))
+    for key, label in criteria:
         it: ContentItem = getattr(out, key)
         verdict = it.verdict.strip().lower()
         ev = locate_quote(flat, it.evidence_quote) if it.evidence_quote.strip() else None
-        if ev is None and verdict != "missing":
+        # "Answered the question" always needs the speaker's own words, whatever the verdict.
+        if ev is None and (verdict != "missing" or key == "answered"):
             dropped.append(label)  # a judgement we cannot tie to the speaker's words is not shown
             continue
         items.append({"key": key, "label": label, "verdict": verdict, "note": it.note.strip(), "evidence": ev})
@@ -137,8 +150,10 @@ def coach_improv(analysis: dict, transcript: Transcript, llm, history: list[dict
         if not transcript.words:
             res["content_review"] = {"available": True, "reason": "No speech was recognized.", "items": []}
         else:
-            cu = (f"Topic: {analysis.get('topic') or '(none given)'}\n"
+            question = analysis.get("question")
+            cu = (f"{'Question asked' if question else 'Topic'}: {analysis.get('topic') or '(none given)'}\n"
                   f"Time goal: {analysis.get('goal_s') or 'none'} seconds\n\n"
                   f"Transcript:\n\"\"\"\n{transcript.text.strip()}\n\"\"\"")
-            res["content_review"] = validate_content(llm.complete_structured(SYSTEM_CONTENT, cu, ContentReview), transcript)
+            system, schema = (SYSTEM_QA, QAContentReview) if question else (SYSTEM_CONTENT, ContentReview)
+            res["content_review"] = validate_content(llm.complete_structured(system, cu, schema), transcript)
     return res

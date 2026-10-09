@@ -349,9 +349,10 @@ async def create_take_job(audio: UploadFile = File(...), script: str = Form(...)
 
 @app.post("/api/jobs/improv")
 async def create_improv_job(audio: UploadFile = File(...), topic: str = Form(...), goal_s: float | None = Form(None),
-                            content: bool = Form(False), settings: str | None = Form(None), label: str = Form("")) -> dict:
+                            content: bool = Form(False), settings: str | None = Form(None), label: str = Form(""),
+                            question: str | None = Form(None)) -> dict:
     from take_two.improv_routes import new_improv_take
-    take_id, st = await new_improv_take(audio, topic, goal_s, content, settings, label)
+    take_id, st = await new_improv_take(audio, topic, goal_s, content, settings, label, question)
     return _start_job(take_id, st)
 
 

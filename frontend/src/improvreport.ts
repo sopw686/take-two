@@ -6,7 +6,7 @@ import { clear, fmtClock, fmtTime, h } from "./dom";
 import { play, player } from "./player";
 import { state } from "./state";
 import { statusChip } from "./status";
-import type { ImprovAnalysis, ImprovReport } from "./types";
+import type { ImprovAnalysis, ImprovReport, Question } from "./types";
 
 
 function word(s: string): string {
@@ -224,7 +224,7 @@ function trendCard(a: ImprovAnalysis): HTMLElement | null {
         h("td", {}, v(x.hesitations_per_min)), h("td", {}, v(x.pitch_range_st))))))));
 }
 
-export function renderImprovReport(root: HTMLElement, again: (topic: string) => void): void {
+export function renderImprovReport(root: HTMLElement, again: (topic: string, question?: Question | null) => void): void {
   clear(root);
   const a = state.improv;
   if (!a) return;
@@ -246,10 +246,12 @@ export function renderImprovReport(root: HTMLElement, again: (topic: string) => 
 
   root.append(
     h("div", { class: "report-head" },
-      h("div", {}, h("h2", {}, h("span", { class: "mode-badge" }, "Improvise"), " ", a.topic),
+      h("div", {}, h("h2", {}, h("span", { class: "mode-badge" }, a.question ? "Question" : "Improvise"), " ", a.topic),
+        a.question?.line_index !== undefined && a.question?.line_index !== null
+          ? h("p", { class: "muted small" }, `${a.question.tag ? a.question.tag[0].toUpperCase() + a.question.tag.slice(1) + " question" : "Question"} about line ${a.question.line_index + 1}: “${a.question.line_text ?? ""}”`) : null,
         h("span", { class: "muted small" }, `${a.label ? a.label + " · " : ""}${new Date(a.created_at).toLocaleString()} · ${fmtTime(a.duration_s)}`)),
       h("div", { class: "head-actions" },
-        h("button", { class: "ghost-btn", type: "button", onClick: () => again(a.topic) }, "Try this topic again"),
+        h("button", { class: "ghost-btn", type: "button", onClick: () => again(a.topic, a.question) }, a.question ? "Answer it again" : "Try this topic again"),
         reBtn)),
     headStatus,
     h("section", { class: "summary" }, h("ul", {}, ...a.summary.map((s) => h("li", {}, s))),

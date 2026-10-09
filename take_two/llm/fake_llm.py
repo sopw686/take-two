@@ -28,6 +28,10 @@ class FakeLLM:
             return output.model_validate(self._improv_coach(user))  # type: ignore[return-value]
         if output.__name__ == "ContentReview":
             return output.model_validate(self._content_review(user))  # type: ignore[return-value]
+        if output.__name__ == "QAContentReview":
+            return output.model_validate(self._qa_review(user))  # type: ignore[return-value]
+        if output.__name__ == "QuestionsOutput":
+            return output.model_validate(self._questions(user))  # type: ignore[return-value]
         return None  # define checks fall back to the heuristic
 
     @staticmethod
@@ -60,6 +64,35 @@ class FakeLLM:
             "ending": {"verdict": "weak", "note": "(fake) The last line trails off rather than closing.", "evidence_quote": last},
             "rewrite_opening": f"(fake) What if everything you thought about {topic.group(1) if topic else 'this'} was only half the story?",
         }
+
+    @staticmethod
+    def _questions(user: str) -> dict:
+        lines = re.findall(r"^(\d+): (.*)$", user, flags=re.M)
+        if not lines:
+            return {"questions": []}
+        n = len(lines)
+        pick = lambda k: lines[min(n - 1, k)]  # noqa: E731
+        i0, i1, i2 = int(pick(0)[0]), int(pick(n // 2)[0]), int(pick(n - 1)[0])
+        return {"questions": [
+            {"text": f"(fake) What exactly do you mean by the terms in line {i0 + 1}?", "tag": "clarification", "line_index": i0},
+            {"text": f"(fake) How do you know the result in line {i1 + 1} is not an artefact of how you chose the data?",
+             "tag": "methods challenge", "line_index": i1},
+            {"text": "(fake) Where would this approach stop working?", "tag": "limitation", "line_index": i2},
+            {"text": "(fake) What should people do differently because of this?", "tag": "implication", "line_index": i2},
+            {"text": "(fake) What would you do next with more time?", "tag": "implication", "line_index": i1},
+            # Invalid on purpose, so the code's checks visibly drop them:
+            {"text": "(fake) A question about a line that does not exist?", "tag": "clarification", "line_index": n + 50},
+            {"text": "(fake) A question with a made-up tag?", "tag": "trivia", "line_index": i0},
+        ]}
+
+    @staticmethod
+    def _qa_review(user: str) -> dict:
+        review = FakeLLM._content_review(user)
+        m = re.search(r'"""\n(.*)\n"""', user, flags=re.S)
+        words = (m.group(1) if m else "").split()
+        review["answered"] = {"verdict": "present", "note": "(fake) The answer comes in the second half rather than up front.",
+                              "evidence_quote": " ".join(words[len(words) // 3: len(words) // 3 + 6])}
+        return review
 
     @staticmethod
     def _proposal(user: str) -> dict:

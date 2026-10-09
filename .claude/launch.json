@@ -27,6 +27,16 @@
         "$env:TAKE_TWO_TAKES_DIR='.devtakes'; uv run uvicorn take_two.app:app --host 127.0.0.1 --port 8766 --reload --reload-dir take_two"
       ],
       "port": 8766
+    },
+    {
+      "name": "take-two-dev-fake",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-Command",
+        "$env:TAKE_TWO_TAKES_DIR='.devtakes'; $env:TAKE_TWO_LLM='fake'; uv run uvicorn take_two.app:app --host 127.0.0.1 --port 8767"
+      ],
+      "port": 8767
     }
   ]
 }

@@ -319,6 +319,7 @@ export interface ImprovHistoryRow {
 
 export interface ImprovAnalysis {
   mode: "improv";
+  question?: Question | null;
   take_id: string;
   created_at: string;
   label: string;
@@ -341,6 +342,17 @@ export interface ImprovAnalysis {
 }
 
 export interface Topic { text: string; category: string; level: "easy" | "medium" | "hard" }
+
+/** A question to answer in Improvise: proposed from the script (tag and line) or typed (text only). */
+export interface Question { text: string; tag?: string | null; line_index?: number | null; line_text?: string }
+
+export interface QuestionsResponse {
+  available: boolean;
+  reason?: string;
+  questions: Question[];
+  dropped: { reason: string; count: number }[];
+  proposed?: number;
+}
 
 /** A background analysis: GET /api/jobs/{take_id}. */
 export interface JobStatus {
