@@ -23,7 +23,7 @@ export function openSuggest(root: HTMLElement, script: string, onDone: () => voi
     if (i === 0) inp.checked = true;
     return { g, inp };
   });
-  const status = h("p", { class: "muted small" }, "");
+  const status = h("p", { class: "muted small", role: "status" }, "");
   const go = h("button", { class: "primary", type: "button" }, "Suggest marks") as HTMLButtonElement;
   go.addEventListener("click", async () => {
     const goal = goalInputs.find((x) => x.inp.checked)?.g.id ?? "clear";

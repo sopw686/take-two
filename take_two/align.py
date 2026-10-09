@@ -149,7 +149,10 @@ def adlib_spans(al: Alignment, transcript: Transcript, found: set[int], claimed:
     for cur in anchors + [None]:
         nxt_w = min(cur.transcript_indexes) if cur is not None else len(words)
         gap = [w for w in range(prev_w + 1, nxt_w) if w in comparable and w not in taken]
-        if gap and (prev is not None or cur is not None):
+        # Words between two lines with an unfound line in between belong to that line, which is not compared.
+        skipped = prev is not None and cur is not None and any(
+            ln not in found for ln in range(prev.token.line + 1, cur.token.line))
+        if gap and not skipped and (prev is not None or cur is not None):
             if prev is None:
                 line, k = cur.token.line, cur.token.index
             elif cur is None or prev.token.line == cur.token.line:
@@ -158,13 +161,21 @@ def adlib_spans(al: Alignment, transcript: Transcript, found: set[int], claimed:
                 before = words[gap[0]].start - (prev.end if prev.end is not None else words[gap[0]].start)
                 after = (cur.start if cur.start is not None else words[gap[-1]].end) - words[gap[-1]].end
                 line, k = (prev.token.line, prev.token.index + 1) if before <= after else (cur.token.line, cur.token.index)
-            said = [n for i in gap for n in normalize_word(words[i].text)]
             near = [t.token.norm for t in (prev, cur) if t is not None]
-            out.setdefault(line, []).append({
-                "word_index": k, "text": " ".join(words[i].text for i in gap),
-                "start": round(words[gap[0]].start, 3), "end": round(words[gap[-1]].end, 3), "words": gap,
-                "repeat": said in near,  # a restart such as "the the model"
-            })
+            # One span per run of consecutive words, so every span's text is a verbatim slice of the transcript.
+            runs: list[list[int]] = []
+            for w in gap:
+                if runs and w == runs[-1][-1] + 1:
+                    runs[-1].append(w)
+                else:
+                    runs.append([w])
+            for run in runs:
+                said = [n for i in run for n in normalize_word(words[i].text)]
+                out.setdefault(line, []).append({
+                    "word_index": k, "text": " ".join(words[i].text for i in run),
+                    "start": round(words[run[0]].start, 3), "end": round(words[run[-1]].end, 3), "words": run,
+                    "repeat": said in near,  # a restart such as "the the model"
+                })
         if cur is not None:
             prev, prev_w = cur, max(prev_w, max(cur.transcript_indexes))
     return out

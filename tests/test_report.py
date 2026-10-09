@@ -48,14 +48,48 @@ def test_dropped_words_are_flagged_and_skipped_lines_are_not_compared():
     assert skipped["status"] == "not_found" and skipped["adlibs"] == [] and skipped["words_differ"] is None
 
 
+THREE = """## A [0:30]
+The quick brown fox jumps over the lazy dog.
+We measured accuracy on the held out set.
+Finally we conclude that the method works.
+"""
+THREE_TEXT = ("the quick brown fox jumps over the lazy dog we measured accuracy on the held out set okay so "
+              "finally we conclude that the method works")
+
+
 def test_adlib_between_lines_goes_to_the_nearer_line():
-    # "okay so" follows line 1 with no gap and is followed by a long pause before line 2 (16 words in).
-    text = ("the quick brown fox jumps over the lazy dog we measured accuracy on the held out set okay so "
-            "finally we conclude that the method works")
-    res = _run(SAID, text, gaps={18: 2.0})
+    # "okay so" (words 17-18) directly follows line 2; a long pause separates it from line 3...
+    res = _run(THREE, THREE_TEXT, gaps={18: 2.0})
     assert [a["text"] for a in res["lines"][1]["adlibs"]] == ["okay so"]
     assert res["lines"][1]["adlibs"][0]["word_index"] == len(res["lines"][1]["words"])
-    assert res["lines"][3]["adlibs"] == []
+    assert res["lines"][2]["adlibs"] == []
+    # ...and with the pause before it instead, it belongs to the start of line 3.
+    res = _run(THREE, THREE_TEXT, gaps={16: 2.0})
+    assert res["lines"][1]["adlibs"] == []
+    assert [(a["word_index"], a["text"]) for a in res["lines"][2]["adlibs"]] == [(0, "okay so")]
+
+
+def test_adlibs_before_the_first_and_after_the_last_word():
+    res = _run(THREE, "so um " + THREE_TEXT.replace(" okay so", "") + " thank you")
+    assert [(a["word_index"], a["text"]) for a in res["lines"][0]["adlibs"]] == [(0, "so um")]
+    last = res["lines"][2]
+    assert [(a["word_index"], a["text"]) for a in last["adlibs"]] == [(len(last["words"]), "thank you")]
+
+
+def test_words_said_in_place_of_an_unfound_line_are_not_pinned_on_its_neighbours():
+    # Line 2 is replaced by a paraphrase that shares too few words to be found.
+    text = ("the quick brown fox jumps over the lazy dog "
+            "here we tested how accurate it was on new data "
+            "finally we conclude that the method works")
+    res = _run(THREE, text)
+    assert res["lines"][1]["status"] == "not_found"
+    assert res["lines"][0]["adlibs"] == [] and res["lines"][2]["adlibs"] == []
+    assert res["lines"][0]["words_differ"] == 0 and res["lines"][2]["words_differ"] == 0
+
+
+def test_a_mark_with_nothing_to_compare_is_never_dropped():
+    res = _run(THREE.replace("lazy dog.", "lazy - dog."), THREE_TEXT.replace(" okay so", ""))
+    assert not any(w["dropped"] for w in res["lines"][0]["words"]) and res["lines"][0]["words_differ"] == 0
 
 
 # ---- cut to fit --------------------------------------------------------------------------
@@ -89,6 +123,12 @@ def test_only_sections_over_budget_get_a_cut_and_the_total_is_checked():
     assert total["status"] == "over" and total["budget_s"] == 6
     assert total["cut"]["text"].startswith("The whole talk ran") and "its 0:06 budget" in total["cut"]["text"]
     assert abs(total["spoken_s"] - (res["lines"][-1]["end"] - res["lines"][0]["start"])) < 0.01
+
+
+def test_total_fit_within_tolerance_has_no_cut():
+    res = _run(TIMED.replace("[0:02]", "[0:10]"), TIMED_TEXT)  # 14 s budgeted for about 13 s spoken
+    assert res["fit_total"]["status"] == "met" and "cut" not in res["fit_total"]
+    assert all(sec["cut"] is None for sec in res["sections"])
 
 
 def test_total_fit_needs_every_section_budgeted_and_found():
@@ -157,3 +197,31 @@ def test_focus_says_so_when_everything_met():
 def test_a_full_divergence_outranks_a_close_one_with_a_bigger_gap():
     a = _analysis(lines=[_key(0, "near", -8.0)], sections=[_section("Intro", "over", 4.0, budget=60.0)])
     assert [i["kind"] for i in focus(a)["items"]] == ["section", "KEY"]
+
+
+def test_focus_does_not_claim_everything_met_when_marks_were_not_measured():
+    a = _analysis(pauses=[_pause(0, "met", 0.9), _pause(1, "unmeasurable", None)],
+                  sections=[_section("Intro", "met", 1.0), _section("Methods", "not_found", None)])
+    f = focus(a)
+    assert f["all_met"] is False and f["items"] == [] and "could not be measured" in f["note"]
+
+
+def test_a_section_over_a_zero_budget_is_still_a_focus_item():
+    a = _analysis(sections=[_section("Intro", "over", 9.1, budget=0.0)])
+    f = focus(a)
+    assert [i["mark"] for i in f["items"]] == ["Section Intro"]
+
+
+def test_under_budget_ranks_as_close_like_the_chip_shows():
+    a = _analysis(lines=[_key(0, "near", -2.0)], sections=[_section("Intro", "under", -30.0)])
+    # Both "close": the larger relative gap wins (30 s of a 60 s budget vs 12 points on the rate).
+    assert [i["kind"] for i in focus(a)["items"]] == ["section", "KEY"]
+    b = _analysis(lines=[_key(0, "near", -2.0)], sections=[_section("Intro", "over", 4.0)])
+    assert [i["kind"] for i in focus(b)["items"]] == ["section", "KEY"]
+    # A close KEY line with the larger gap (a short pause: 0.3 of 0.7 s) outranks a slightly-under section...
+    near_key = _key(0, "near", -15.0, pause=0.3, rate_status="met", pause_status="short")
+    c = _analysis(lines=[near_key], sections=[_section("Intro", "under", -6.0)])
+    assert [i["kind"] for i in focus(c)["items"]] == ["KEY", "section"]
+    # ...but not a section that went over, which is a full divergence.
+    d = _analysis(lines=[near_key], sections=[_section("Intro", "over", 6.0)])
+    assert [i["kind"] for i in focus(d)["items"]] == ["section", "KEY"]

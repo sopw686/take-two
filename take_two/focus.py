@@ -13,8 +13,8 @@ from take_two.compare import DIVERGED, _key_marks
 from take_two.marks import format_budget
 
 MAX_ITEMS = 3
-# Statuses that are not met but not a full divergence either.
-CLOSE = {"near", "short"}
+# Statuses that are not met but not a full divergence either (the report shows them as "close ~").
+CLOSE = {"near", "short", "under"}
 
 
 def _short(text: str, n: int = 40) -> str:
@@ -60,7 +60,7 @@ def _candidates(a: dict) -> list[dict]:
                     "text": f"{label}{around}: {p['measured_s']:.2f} s of silence against your {p['target_s']:.1f} s mark.",
                     "gap": _clamp((p["target_s"] - p["measured_s"]) / p["target_s"]), "order": (p["line"], 1 + p["word_index"])})
     for s in a.get("sections", []):
-        if s["status"] not in ("over", "under") or s.get("delta_s") is None or not s.get("budget_s"):
+        if s["status"] not in ("over", "under") or s.get("delta_s") is None or s.get("budget_s") is None:
             continue
         d = s["delta_s"]
         text = f"Section {s['name']} ran {format_budget(abs(d))} {'over' if d > 0 else 'under'} its {s['budget_label']} budget."
@@ -68,7 +68,7 @@ def _candidates(a: dict) -> list[dict]:
         if d > 0 and cut.get("words"):
             text += f" That is about {cut['words']} words at your {cut['wpm']:.0f} wpm."
         out.append({"key": ("section", s["name"]), "kind": "section", "mark": f"Section {s['name']}", "status": s["status"],
-                    "text": text, "gap": _clamp(abs(d) / s["budget_s"]), "order": (s["line_start"], -1)})
+                    "text": text, "gap": _clamp(abs(d) / s["budget_s"]) if s["budget_s"] else 1.0, "order": (s["line_start"], -1)})
     for d in a.get("defines", []):
         if d["status"] not in ("undefined", "never_spoken"):
             continue
@@ -94,13 +94,17 @@ def focus(analysis: dict, earlier: list[dict] | None = None) -> dict:
     cands = _candidates(analysis)
     for c in cands:
         c["repeat"] = counts.get(c["key"], 0)
-    cands.sort(key=lambda c: (0 if c["repeat"] >= 2 else 1, -c["repeat"], 1 if c["status"] in CLOSE else 0,
+    # Repetition only counts from two takes up; below that, this take's own divergence decides.
+    cands.sort(key=lambda c: (0 if c["repeat"] >= 2 else 1, -c["repeat"] if c["repeat"] >= 2 else 0, 1 if c["status"] in CLOSE else 0,
                               -c["gap"], c["order"]))
     items = [{"mark": c["mark"], "kind": c["kind"], "status": c["status"], "text": c["text"],
               "repeat": c["repeat"], "takes": len(group)} for c in cands[:MAX_ITEMS]]
     if items:
         return {"all_met": False, "items": items, "note": None}
-    if all_marks_met(analysis):
+    unmeasured = (any(r.get("key") and r["key"]["status"] in ("not_found", "unmeasurable") for r in analysis.get("lines", []))
+                  or any(p["status"] == "unmeasurable" for p in analysis.get("pauses", []))
+                  or any(s["status"] == "not_found" for s in analysis.get("sections", [])))
+    if not unmeasured and all_marks_met(analysis):
         return {"all_met": True, "items": [], "note": "Everything met its mark in this take."}
     return {"all_met": False, "items": [],
             "note": "Nothing that was measured diverged from its mark; some marks could not be measured in this take."}

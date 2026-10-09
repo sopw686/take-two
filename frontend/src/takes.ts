@@ -69,8 +69,16 @@ function unfinishedItem(t: TakeSummary, root: HTMLElement, openReport: () => voi
     del.setAttribute("disabled", "");
     note.textContent = "Analyzing the saved recording…";
     try {
-      state.setTake(await api.retryTake(t.take_id, { script, settings: state.effectiveSettings() }));
-      openReport();
+      let job = await api.startRetryJob(t.take_id, { script, settings: state.effectiveSettings() });
+      while (job.status === "queued" || job.status === "running") {
+        const text = `Analyzing the saved recording (${job.stage && job.stage !== "starting" ? job.stage : "starting"})…`;
+        if (note.textContent !== text) note.textContent = text;
+        await new Promise((r) => setTimeout(r, 500));
+        job = await api.job(t.take_id);
+      }
+      if (job.status === "failed" || !job.result) throw new Error(job.error ?? "the analysis did not finish");
+      state.setTake(job.result);
+      if (note.isConnected) openReport();
     } catch (err) {
       note.textContent = `Retry failed: ${(err as Error).message}`;
       retry.removeAttribute("disabled");

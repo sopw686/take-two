@@ -134,6 +134,12 @@ function summaryCard(a: Analysis): HTMLElement {
       `Transcribed ${a.stt.local ? "on this computer" : "by a cloud service"} with ${a.stt.model} (${a.stt.device}); pauses measured with ${a.silence_method}. Click any line or mark to hear it.`));
 }
 
+/** How a repeated miss is described, by mark kind, as in the take comparison. */
+function repeatVerb(kind: string): string {
+  return kind === "/" || kind === "//" ? "Came up short" : kind === "section" ? "Went off budget"
+    : kind === "DEFINE" ? "Went undefined" : "Missed this mark";
+}
+
 /** Up to three marks to work on next, written by code from the measurements (no model). */
 function focusCard(a: Analysis): HTMLElement | null {
   const f = a.focus;
@@ -142,9 +148,9 @@ function focusCard(a: Analysis): HTMLElement | null {
     h("h3", {}, "Focus for the next take"),
     f.items.length
       ? h("ol", {}, ...f.items.map((it) => h("li", {}, statusChip(it.status, it.kind === "section" ? "section" : it.kind),
-        it.text, it.repeat >= 2 ? h("span", { class: "muted small" }, ` Diverged in ${it.repeat} of ${it.takes} takes of this script.`) : null)))
+        it.text, it.repeat >= 2 ? h("span", { class: "muted small" }, ` ${repeatVerb(it.kind)} in ${it.repeat} of ${it.takes} takes of this script.`) : null)))
       : h("p", {}, f.note ?? ""),
-    h("p", { class: "muted small" }, "Written by the app from your numbers, no model involved: marks that diverged in two or more takes first, then this take's largest divergences."));
+    h("p", { class: "muted small" }, "Written by the app from your numbers, no model involved: marks missed in two or more takes first, then this take's largest divergences."));
 }
 
 function conventionsCard(a: Analysis): HTMLElement | null {
@@ -175,7 +181,8 @@ function coachingCard(a: Analysis, onRefresh: () => void): HTMLElement {
   } }, c ? "Refresh suggestions" : "Suggestions based on your measurements") as HTMLButtonElement;
   const llm = state.health?.llm;
   if (!llm?.available) {
-    return h("section", { class: "card muted small" }, "Model-written suggestions need an ANTHROPIC_API_KEY on the server. The model would read only the measured numbers above, never the audio. The focus list above needs no key.");
+    return h("section", { class: "card muted small" }, "Model-written suggestions need an ANTHROPIC_API_KEY on the server. The model would read only the measured numbers above, never the audio."
+      + (a.focus ? " The focus list above needs no key." : ""));
   }
   const body = c
     ? (c.all_met && !c.suggestions.length
@@ -222,10 +229,16 @@ export function renderReport(root: HTMLElement): void {
     }
   } }, "Re-analyze with current script and settings") as HTMLButtonElement;
 
-  const diff = showDiff();
+  // Takes analyzed before the comparison existed have no ad-lib data: say so instead of implying nothing differs.
+  const compared = a.lines.some((l) => l.words_differ !== undefined);
+  const diff = compared && showDiff();
   const diffToggle = h("input", { type: "checkbox" }) as HTMLInputElement;
   diffToggle.checked = diff;
-  diffToggle.addEventListener("change", () => { setShowDiff(diffToggle.checked); rerender(); });
+  diffToggle.addEventListener("change", () => {
+    setShowDiff(diffToggle.checked);
+    rerender();
+    root.querySelector<HTMLInputElement>(".diff-toggle input")?.focus({ preventScroll: true });
+  });
   const totalDiffer = a.lines.reduce((n, l) => n + (l.words_differ ?? 0), 0);
 
   const scriptEl = h("div", { class: "script-report" }, ...a.sections.flatMap((s) => [
@@ -236,7 +249,8 @@ export function renderReport(root: HTMLElement): void {
   const legend = h("div", { class: "legend muted small" },
     statusChip("met", "met your mark"), statusChip("near", "close"), statusChip("diverged", "diverged"), statusChip("unknown", "not measured"),
     " · hover, focus or click a mark for the numbers · click a line to hear it",
-    h("label", { class: "diff-toggle" }, diffToggle, ` What you said vs. the script${totalDiffer ? ` (${totalDiffer} words differ)` : ""}`));
+    compared ? h("label", { class: "diff-toggle" }, diffToggle, ` What you said vs. the script${totalDiffer ? ` (${totalDiffer} words differ)` : ""}`)
+      : h("span", { class: "diff-toggle" }, "Re-analyze to compare what you said with the script (this take predates it)."));
   const diffLegend = diff ? h("p", { class: "legend muted small" },
     h("span", { class: "w dropped" }, "struck"), " = in the script, not heard · ", h("span", { class: "adlib" }, "boxed"), " = said, not in the script") : null;
 

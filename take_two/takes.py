@@ -189,6 +189,9 @@ def take_status(take_id: str) -> dict:
         return {"status": "done", "stage": None, "error": None, "retryable": False}
     meta = load_meta(take_id)
     status, error = meta.get("status") or "failed", meta.get("error")
+    if status != "processing" and is_busy(take_id):
+        # A retry waiting in the job queue: take.json keeps the last failure until the worker claims the take.
+        return {"status": "processing", "stage": "queued", "error": None, "retryable": False}
     if status == "processing" and not is_busy(take_id):
         # Only this process can be working on it: a server that stopped (crash, Ctrl+C, a --reload restart)
         # comes back as a new process, and its unfinished take must be retryable right away.

@@ -1,33 +1,54 @@
 # Take Two
 
-Take Two is a rehearsal coach for science talks that checks your delivery against **your own marks**, not a universal standard. You mark up the script the way performers mark a poem: slow down here, pause here, define this term aloud. Then you rehearse out loud and the report shows, line by line, where the take diverged from what you intended.
+**A rehearsal coach for science talks that checks your delivery against your own marks, not a universal standard.**
 
-## Run it
+Tools like PowerPoint Speaker Coach and Yoodli grade everyone against the same idea of a good speaker. They can't tell a deliberate pause after your main result from losing your place. With Take Two you mark up the script the way a performer marks a poem (slow down here, pause here, define this term aloud), rehearse out loud, and get a report showing line by line where the take met or diverged from what *you* intended. There is no overall score.
 
-Requirements: [uv](https://docs.astral.sh/uv/), Node 18+ (for the one-time frontend build). An NVIDIA GPU is used automatically if present; CPU works too.
+- **Local-first:** speech-to-text (faster-whisper) and pause detection (Silero VAD) run on your machine. Audio leaves it only if you add a cloud key, and the UI says so.
+- **Optional LLM features** (Claude): suggest marks, check whether jargon was defined, coaching notes. The model sees text and numbers, never audio, and code verifies its output (e.g. quotes not found in the transcript are dropped).
+- **Stack:** Python / FastAPI backend, TypeScript / Vite frontend. 133 unit tests plus a synthetic recording with known ground truth.
+
+## Quick start
+
+Requires [uv](https://docs.astral.sh/uv/) and Node 18+ (one-time frontend build). An NVIDIA GPU is used automatically if present; CPU works too.
 
 ```powershell
-.\run.ps1
+# Windows
+.
+un.ps1
 ```
 
 ```bash
+# macOS / Linux / Git Bash
 ./run.sh
 ```
 
-Then open http://127.0.0.1:8765. The first run installs the Python environment, builds the frontend, and downloads the `small.en` speech model (~500 MB) if it is not cached.
+Then open <http://127.0.0.1:8765>. The first run installs the Python environment, builds the frontend, and downloads the `small.en` speech model (~500 MB).
 
-Everything runs locally by default. Audio never leaves your computer unless you configure a cloud key (below), and the app says so at the top of the page.
+**Fastest way to see it working (no microphone, no model, no key):** open the **Report** tab and click **Load example take**. It loads a synthetic-voice take of a short coral-reef script, analyzed instantly from a committed transcript.
 
-## Optional keys
+**To try it yourself:** paste `sample_script.md` (or `demo_speech.md`) into the Script tab, go to Rehearse, record, and read the report.
 
-| Variable | Effect |
+## Where to look
+
+| If you want... | Read |
 |---|---|
-| `ANTHROPIC_API_KEY` | Enables **Suggest marks** and LLM-checked `[DEFINE]` terms. Without it, suggestions are disabled with a one-line note and definitions use a heuristic, labelled as such. |
-| `OPENAI_API_KEY` + `TAKE_TWO_STT=openai` | Transcribe with OpenAI's Whisper API instead of locally. The UI shows a banner when audio leaves the machine. |
-| `TAKE_TWO_STT_MODEL` | Local model: `base.en` (faster), `small.en` (default), `medium.en`, … |
-| `TAKE_TWO_STT_DEVICE` | `auto` (default), `cuda`, or `cpu`. |
-| `TAKE_TWO_TAKES_DIR` | Where takes are saved (default `takes/` next to the app). If that folder is inside a cloud-synced folder (OneDrive, Dropbox, iCloud), the sync client uploads your recordings; point this at a local folder to keep audio on the machine. |
-| `TAKE_TWO_LLM=fake` | Development only: a labelled stand-in model so the suggestion UI can be tried without a key. Not a fallback; without it and without a key, suggestions stay off. |
+| The one-page summary | [WRITEUP.md](WRITEUP.md) |
+| Why it's designed this way | [DECISIONS.md](DECISIONS.md) |
+| What is tested, checked by hand, and weak | [TESTING.md](TESTING.md) |
+| A demo walkthrough | [DEMO.md](DEMO.md) (script: [demo_speech.md](demo_speech.md)) |
+| The pitch outline | [PITCH.md](PITCH.md) |
+
+## Run the tests
+
+```bash
+uv run pytest            # unit tests, about 10 seconds
+uv run pytest -m slow    # synthetic fixture through real local speech-to-text
+```
+
+---
+
+# Reference
 
 ## Mark syntax
 
@@ -77,16 +98,18 @@ Every measure is compared with a **reference band you can edit** in Settings →
 
 Before recording, choose **Delivery only** (fully local) or **Delivery + content**. With an API key, content mode also asks the model to review the hook, staying on topic, suspense and the ending from the transcript text; every judgement must quote your words, and code drops any quote it cannot find. The model also proposes one more gripping opening line. Improvise takes appear in Takes with a badge, and the report shows your recent Improvise numbers side by side.
 
-## Tests
+## Optional keys
 
-```bash
-uv run pytest            # unit tests, about a second
-uv run pytest -m slow    # the synthetic fixture through real local speech-to-text
-```
+| Variable | Effect |
+|---|---|
+| `ANTHROPIC_API_KEY` | Enables **Suggest marks** and LLM-checked `[DEFINE]` terms. Without it, suggestions are disabled with a one-line note and definitions use a heuristic, labelled as such. |
+| `OPENAI_API_KEY` + `TAKE_TWO_STT=openai` | Transcribe with OpenAI's Whisper API instead of locally. The UI shows a banner when audio leaves the machine. |
+| `TAKE_TWO_STT_MODEL` | Local model: `base.en` (faster), `small.en` (default), `medium.en`, … |
+| `TAKE_TWO_STT_DEVICE` | `auto` (default), `cuda`, or `cpu`. |
+| `TAKE_TWO_TAKES_DIR` | Where takes are saved (default `takes/` next to the app). If that folder is inside a cloud-synced folder (OneDrive, Dropbox, iCloud), the sync client uploads your recordings; point this at a local folder to keep audio on the machine. |
+| `TAKE_TWO_LLM=fake` | Development only: a labelled stand-in model so the suggestion UI can be tried without a key. Not a fallback; without it and without a key, suggestions stay off. |
 
-See `TESTING.md` for what is covered, what was checked by hand, and known weak spots.
-
-## Layout
+## Project layout
 
 ```
 take_two/           FastAPI backend: parser, STT adapters, VAD, alignment, analysis, LLM features, Improvise (improv*.py, prosody.py, topics.py)
@@ -97,8 +120,6 @@ examples/         the example take (synthetic voice, script, committed transcrip
 sample_script.md  a placeholder talk to try the marks on
 ```
 
-See `DECISIONS.md` for design choices, `TESTING.md` for what is and is not verified, `DEMO.md` for a demo walkthrough (with `demo_speech.md`, a marked talk about Take Two), `PITCH.md` for the pitch outline, and `WRITEUP.md` for the one-page submission write-up.
-
 ## Known limitations
 
 - Word timestamps from Whisper drift by up to ~0.2 s; pauses are measured with a separate voice-activity detector, but line boundaries inherit that noise.
@@ -107,5 +128,3 @@ See `DECISIONS.md` for design choices, `TESTING.md` for what is and is not verif
 - The emphasis check is experimental and sensitive to microphone distance.
 - Mobile layouts are not a goal; use a laptop.
 - Improvise's clarity measure is the recognizer's confidence, not phoneme-level pronunciation scoring. Pitch measures need `praat-parselmouth` (installed by default); without it they show as not measurable.
-#   t a k e - t w o  
- 

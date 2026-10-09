@@ -31,7 +31,10 @@ def submit(take_id: str, mode: str, work: Callable[[pipeline.Progress], dict]) -
         job = _jobs.get(take_id)
         if (job and job["status"] in ("queued", "running")) or take_id in takes.ACTIVE:
             raise takes.Busy(take_id)
-        _jobs[take_id] = {"take_id": take_id, "mode": mode, "status": "queued", "stage": "queued", "error": None}
+        ahead = any(j["status"] in ("queued", "running") for k, j in _jobs.items() if k != take_id)
+        # "queued" only when another take really is ahead; otherwise it is about to start.
+        _jobs[take_id] = {"take_id": take_id, "mode": mode, "status": "queued", "stage": "queued" if ahead else "starting",
+                          "error": None}
     takes.reserve(take_id)  # listings show it as being processed, not interrupted
 
     def progress(stage: str) -> None:

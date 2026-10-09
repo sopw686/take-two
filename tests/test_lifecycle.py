@@ -450,10 +450,72 @@ def test_job_status_survives_a_restart_by_reading_the_folder(env):
     assert c.get(f"/api/jobs/{done}").json()["status"] == "done"
 
 
-def test_reanalysis_adds_focus_with_history_of_real_takes_only(env):
+def test_focus_counts_earlier_real_takes_of_the_same_script_only(env):
     c, _, _ = env
-    first = _post_take(c, settings='{"short_pause_s": 0.2}').json()
+    first = _post_take(c).json()["take_id"]
+    takes.update_analysis(first, lambda a: {**a, "created_at": "2000-01-01T00:00:00"})
     second = _post_take(c).json()
-    assert "focus" in first and "focus" in second
+    item = next(i for i in second["focus"]["items"] if i["mark"] == "Section Intro")
+    assert item["takes"] == 2 and item["repeat"] == 2  # under budget in both takes
+    # Re-analyzing the older take only looks further back in time.
+    again = c.post(f"/api/takes/{first}/reanalyze", json={}).json()
+    assert all(i["takes"] == 1 for i in again["focus"]["items"])
+    # An example of a script that also has real takes still counts only itself.
+    src = config.EXAMPLES_DIR / "coral"
+    real = takes.new_take("script", upload=src / "audio.wav", original_name="audio.wav",
+                          script=(src / "script.md").read_text(encoding="utf-8"))
+    (takes.take_path(real) / "transcript.json").write_bytes((src / "transcript.json").read_bytes())
+    pipeline.process_take(real)
     ex = c.post("/api/examples/coral").json()
     assert ex["focus"]["items"] and all(i["takes"] == 1 for i in ex["focus"]["items"])
+
+
+def _blocking_process(monkeypatch, gate):
+    """Make every job wait on `gate` after reporting the transcribing stage."""
+    real = pipeline.process_take
+
+    def slow(take_id, progress=None, settings=None):
+        def stage(s):
+            progress(s)
+            if s == "transcribing":
+                gate.wait(10)
+        return real(take_id, stage, settings)
+    monkeypatch.setattr(pipeline, "process_take", slow)
+
+
+def test_job_status_while_running_and_queued(env, monkeypatch):
+    import threading
+    import time
+    c, _, _ = env
+    gate = threading.Event()
+    _blocking_process(monkeypatch, gate)
+    a = c.post("/api/jobs/takes", files={"audio": ("take.wav", _wav(), "audio/wav")}, data={"script": SCRIPT}).json()
+    assert a["stage"] == "starting"  # nothing ahead of it
+    deadline = time.time() + 10
+    while c.get(f"/api/jobs/{a['take_id']}").json()["stage"] != "transcribing":
+        assert time.time() < deadline
+        time.sleep(0.02)
+    assert c.get(f"/api/jobs/{a['take_id']}").json()["status"] == "running"
+    b = c.post("/api/jobs/takes", files={"audio": ("take.wav", _wav(), "audio/wav")}, data={"script": SCRIPT}).json()
+    assert b["status"] == "queued" and b["stage"] == "queued"
+    gate.set()
+    assert _wait_job(c, a["take_id"])["status"] == "done" and _wait_job(c, b["take_id"])["status"] == "done"
+
+
+def test_a_queued_retry_is_listed_as_being_processed(env, monkeypatch):
+    import threading
+    import time
+    c, holder, _ = env
+    failed = _fail_one(c, holder)
+    gate = threading.Event()
+    _blocking_process(monkeypatch, gate)
+    a = c.post("/api/jobs/takes", files={"audio": ("take.wav", _wav(), "audio/wav")}, data={"script": SCRIPT}).json()
+    deadline = time.time() + 10
+    while c.get(f"/api/jobs/{a['take_id']}").json()["stage"] != "transcribing":
+        assert time.time() < deadline
+        time.sleep(0.02)
+    assert c.post(f"/api/jobs/retry/{failed}").status_code == 200
+    row = next(t for t in c.get("/api/takes").json() if t["take_id"] == failed)
+    assert row["status"] == "processing" and row["retryable"] is False and row["error"] is None
+    gate.set()
+    assert _wait_job(c, failed)["status"] == "done"

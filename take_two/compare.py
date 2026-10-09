@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from collections import Counter
 
-# Statuses that count as diverging from a mark, by mark kind ("close" / "near" does not). Shared with focus.py.
+# Statuses that count as missing a mark, by kind, for counting repeats across takes. Shared with focus.py,
+# which ranks the "close" ones ("short", "under") after full divergences.
 DIVERGED = {"KEY": {"diverged"}, "/": {"short", "missing"}, "//": {"short", "missing"},
             "section": {"over", "under"}, "DEFINE": {"undefined", "never_spoken"}}
 

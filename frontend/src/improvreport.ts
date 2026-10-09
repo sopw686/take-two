@@ -182,7 +182,7 @@ function coachCard(a: ImprovAnalysis, rerender: () => void, autoContent: boolean
       btnContent.removeAttribute("disabled");
     }
   };
-  const status = h("p", { class: "muted small" }, "");
+  const status = h("p", { class: "muted small", role: "status" }, "");
   const btn = h("button", { class: "ghost-btn", type: "button", onClick: () => void run(false) }, a.coaching ? "Refresh delivery coaching" : "Coach my delivery") as HTMLButtonElement;
   const btnContent = h("button", { class: "ghost-btn", type: "button", onClick: () => void run(true) }, a.content_review ? "Refresh with content review" : "Coach delivery + review content") as HTMLButtonElement;
   const c = a.coaching;
@@ -231,13 +231,15 @@ export function renderImprovReport(root: HTMLElement, again: (topic: string) => 
   const p = player();
   if (!p.src.endsWith(a.audio_url)) p.src = a.audio_url;
   const rerender = () => renderImprovReport(root, again);
+  const headStatus = h("p", { class: "small warn", role: "status" });
   const reBtn = h("button", { class: "ghost-btn", type: "button", onClick: async () => {
     reBtn.setAttribute("disabled", "");
+    headStatus.textContent = "";
     try {
       state.setImprov(await api.reanalyzeImprov(a.take_id, state.effectiveSettings()));
       rerender();
     } catch (err) {
-      alert(`Re-analysis failed: ${(err as Error).message}`);
+      headStatus.textContent = `Re-analysis failed: ${(err as Error).message}`;
       reBtn.removeAttribute("disabled");
     }
   } }, "Re-analyze with current settings") as HTMLButtonElement;
@@ -249,6 +251,7 @@ export function renderImprovReport(root: HTMLElement, again: (topic: string) => 
       h("div", { class: "head-actions" },
         h("button", { class: "ghost-btn", type: "button", onClick: () => again(a.topic) }, "Try this topic again"),
         reBtn)),
+    headStatus,
     h("section", { class: "summary" }, h("ul", {}, ...a.summary.map((s) => h("li", {}, s))),
       h("p", { class: "muted small" }, `Transcribed ${a.stt.local ? "on this computer" : "by a cloud service"} with ${a.stt.model}; pauses from ${a.silence_method}; pitch from ${a.improv.engagement.pitch_backend ?? "nothing (not installed)"}. Bands are yours to change in Settings.`)),
     goalBar(a.improv) ?? "",

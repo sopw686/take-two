@@ -43,9 +43,20 @@ export function statusChip(status: string, label: string, opts: { tip?: string; 
 export function installTipPinning(): void {
   const unpin = (except?: Element | null) => document.querySelectorAll(".tip.pinned").forEach((el) => { if (el !== except) el.classList.remove("pinned"); });
   document.addEventListener("click", (e) => {
-    const tip = (e.target as Element | null)?.closest?.(".tip") ?? null;
+    // Only status chips pin; other tooltips (such as suggested marks) already show their reason inline.
+    const tip = (e.target as Element | null)?.closest?.("button.tip") ?? null;
     unpin(tip);
+    tip?.classList.remove("tip-off");
     tip?.classList.toggle("pinned");
   }, { capture: true });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") unpin(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    unpin();
+    // A tip shown by keyboard focus also goes away, until the chip loses focus.
+    const a = document.activeElement;
+    if (a?.classList.contains("tip")) {
+      a.classList.add("tip-off");
+      a.addEventListener("blur", () => a.classList.remove("tip-off"), { once: true });
+    }
+  });
 }

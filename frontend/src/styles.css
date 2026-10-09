@@ -288,6 +288,7 @@ button.mark { cursor: pointer; font-family: var(--mono); }
 button.mark.pause { font-size: 14px; }
 .mark:focus-visible, .w.tip:focus-visible, .timeline:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tip.pinned { box-shadow: 0 0 0 2px var(--accent); }
+.tip.tip-off::after { display: none; }
 .legend .mark { cursor: default; }
 
 /* timeline strip */
