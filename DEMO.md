@@ -8,6 +8,7 @@
 2. Do one practice take and adjust the section time budgets to fit my actual pace.
 3. Record a backup take with the planned mistakes below and leave it in Takes, in case the live one fails.
 4. Set the teleprompter text size (A−/A+) and close any other tabs using the microphone.
+5. If the thresholds were tuned on another machine, put them in the script's first line (`<!-- take-two: short_pause_s=0.8 -->`) so the demo laptop measures the same way. On a fresh browser, dismiss the one-minute tour on the Script tab before going on stage.
 
 ## Planned mistakes
 
@@ -28,6 +29,7 @@ Everything else, including both defined terms and the other two key lines, shoul
 - **3:05, Focus for the next take.** The app picks up to three marks to work on next time, from the numbers alone.
 - **Optional, 30 s: drill it.** Click **Drill** on the rushed `[KEY]` line, say just that line again, slowly, with the pause, and stop. The result appears under the line: "This try: …% slower than your median from the full take; pause after … s: met your mark." It is compared with the full take's median because one line has none of its own.
 - **Optional, 45 s: the questions after the talk.** Improvise tab → **Questions about my script**. With an API key, **Propose likely questions** lists five to eight tagged questions, each tied to a script line; without one, type a question you expect ("How do you know the errors on deep reefs aren't just noise?"). Answer it out loud; the report shows your delivery numbers for the answer, and with **Delivery + content** a quote-backed "Answered the question".
+- **Optional, 15 s: send it to an advisor.** Click **Export report**: one HTML file with the recording inside, every number and tooltip printed, click a line to hear it. It opens offline.
 - **3:15, close:** "There's no score. Every mark is something I chose, the audio never left this laptop, and the report shows where I drifted from what I meant to do."
 
 If there's extra time, I do a one-minute Improvise round: shuffle a topic, set a 30-second goal, choose Delivery only, talk, and show the pace, filler and hedging results.

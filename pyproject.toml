@@ -29,6 +29,7 @@ dev = [
     "librosa>=0.10",
     "praat-parselmouth>=0.4.5",
     "playwright>=1.63.0",
+    "python-pptx>=1.0.2",
 ]
 
 [tool.pytest.ini_options]

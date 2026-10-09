@@ -114,4 +114,5 @@ def coach(analysis: dict, llm, earlier: list[dict] | None = None) -> dict:
     data = compact_measurements(analysis, history_for(analysis, earlier or []))
     user = "Measurements for the latest take (JSON):\n" + json.dumps(data, indent=1) + "\n\nWrite at most three suggestions, or none if all marks were met."
     out = llm.complete_structured(SYSTEM, user, CoachOutput, max_tokens=16000)
-    return validate(out, analysis)
+    name, model = getattr(llm, "name", ""), getattr(llm, "model", "")
+    return {**validate(out, analysis), "model": name if model in ("", "none") else f"{name} ({model})"}

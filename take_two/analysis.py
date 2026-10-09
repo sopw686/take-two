@@ -242,7 +242,8 @@ def analyze(script: Script, transcript: Transcript, silences: list[Silence], set
         start = min((r["start"] for r in rows), default=None)
         end = max((r["end"] for r in rows), default=None)
         dur = (end - start) if start is not None and end is not None else None
-        status = "not_found"
+        # A section with no lines (a slide without notes) has nothing to time; that is not "not found".
+        status = "no_lines" if sec.line_end <= sec.line_start else "not_found"
         delta = None
         if dur is not None:
             if sec.budget_s is None:

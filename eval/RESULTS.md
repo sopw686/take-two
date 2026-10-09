@@ -11,7 +11,7 @@ Written by `uv run python -m eval.run` on 2026-10-09. Every number below was com
 | Transcripts | fresh speech-to-text run |
 | `[DEFINE]` check | heuristic |
 | Settings | app defaults |
-| Pipeline | `take_two/` at commit 92da719 |
+| Pipeline | `take_two/` at commit ef8fb01 with uncommitted changes |
 
 ## Aggregate
 

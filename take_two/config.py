@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import difflib
 import os
+import re
 from pathlib import Path
+from typing import Annotated
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, TypeAdapter, ValidationError, model_validator
 
 ROOT = Path(__file__).resolve().parent.parent
 TAKES_DIR = Path(os.environ.get("TAKE_TWO_TAKES_DIR", ROOT / "takes"))
@@ -72,3 +75,71 @@ class Settings(BaseModel):
         if self.improv_wpm_min > self.improv_wpm_max:
             raise ValueError("improv_wpm_min must not exceed improv_wpm_max")
         return self
+
+
+# ---- settings carried in the script ------------------------------------------------------------
+# An optional first line such as  <!-- take-two: short_pause_s=0.8 key_slower_pct=15 -->  sets thresholds
+# for takes of that script, over the Settings dialog. The parser already blanks comments, so line
+# numbers do not move. "marked:" is accepted too (the app's earlier name).
+
+_SETTINGS_START = re.compile(r"\s*<!--\s*(?:take-two|taketwo|marked)\s*:", re.IGNORECASE)
+_SETTINGS_LINE = re.compile(r"\s*<!--\s*(?:take-two|taketwo|marked)\s*:(?P<body>(?:(?!-->).)*)-->\s*", re.IGNORECASE)
+
+
+class ScriptSettingsError(ValueError):
+    """The script's settings line names an unknown setting or an invalid value."""
+
+
+def settings_line(text: str) -> str | None:
+    """The script's first non-blank line, if it is a settings comment."""
+    first = next((ln for ln in text.splitlines() if ln.strip()), "")
+    if _SETTINGS_LINE.fullmatch(first):
+        return first
+    if _SETTINGS_START.match(first):
+        if "-->" in first:
+            raise ScriptSettingsError("nothing may follow --> on the script's settings line; start the script on the next line")
+        raise ScriptSettingsError("the script's settings line must close with --> on the same line")
+    return None
+
+
+def script_overrides(text: str) -> dict:
+    """{setting: value} from the script's settings line ({} without one). Raises ScriptSettingsError."""
+    line = settings_line(text)
+    if line is None:
+        return {}
+    m = _SETTINGS_LINE.fullmatch(line)
+    assert m is not None
+    raw: dict[str, str] = {}
+    for pair in m.group("body").split():
+        if "=" not in pair:
+            raise ScriptSettingsError(f"“{pair}” in the script's settings line is not name=value")
+        key, value = pair.split("=", 1)
+        if key in raw:
+            raise ScriptSettingsError(f"“{key}” is set twice in the script's settings line")
+        if key not in Settings.model_fields:
+            close = difflib.get_close_matches(key, list(Settings.model_fields), n=1)
+            raise ScriptSettingsError(f"unknown setting “{key}” in the script's settings line"
+                                      + (f" (the nearest name is {close[0]})" if close else " (the README lists every setting)"))
+        raw[key] = value
+    out = {}
+    for key, value in raw.items():
+        field = Settings.model_fields[key]
+        try:  # each value against its own type and bounds; how values combine is checked with the dialog's settings
+            kind = Annotated[field.annotation, *field.metadata] if field.metadata else field.annotation
+            out[key] = TypeAdapter(kind).validate_python(value)
+        except ValidationError as exc:
+            raise ScriptSettingsError(f"the script's settings line sets {key} to “{value}”: "
+                                      f"{exc.errors()[0].get('msg', 'not a valid value')}") from exc
+    return out
+
+
+def effective_settings(requested: Settings, script_text: str) -> tuple[Settings, dict]:
+    """(settings to analyze with, the values that came from the script). Script > request > defaults."""
+    over = script_overrides(script_text)
+    if not over:
+        return requested, {}
+    try:
+        return Settings.model_validate({**requested.model_dump(), **over}), over
+    except ValidationError as exc:  # e.g. a pace band the script and the dialog together turn upside down
+        msg = str(exc.errors()[0].get("msg", "")).removeprefix("Value error, ")
+        raise ScriptSettingsError(f"the script's settings line conflicts with your other settings: {msg}") from exc

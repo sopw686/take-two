@@ -6,7 +6,7 @@ Tools like PowerPoint Speaker Coach and Yoodli grade everyone against the same i
 
 - **Local-first:** speech-to-text (faster-whisper) and pause detection (Silero VAD) run on your machine. Audio leaves it only if you add a cloud key, and the UI says so.
 - **Optional LLM features** (Claude): suggest marks, check whether jargon was defined, coaching notes. The model sees text and numbers, never audio, and code verifies its output (e.g. quotes not found in the transcript are dropped).
-- **Stack:** Python / FastAPI backend, TypeScript / Vite frontend. 133 unit tests plus a synthetic recording with known ground truth.
+- **Stack:** Python / FastAPI backend, TypeScript / Vite frontend. 295 unit tests, a synthetic recording with known ground truth, and a browser test that records through Chrome's fake microphone.
 
 ## Quick start
 
@@ -26,7 +26,7 @@ Then open <http://127.0.0.1:8765>. The first run installs the Python environment
 
 **Fastest way to see it working (no microphone, no model, no key):** open the **Report** tab and click **Load example take**. It loads a synthetic-voice take of a short coral-reef script, analyzed instantly from a committed transcript.
 
-**To try it yourself:** paste `sample_script.md` (or `demo_speech.md`) into the Script tab, go to Rehearse, record, and read the report.
+**To try it yourself:** paste `sample_script.md` (or `demo_speech.md`) into the Script tab, or import the speaker notes of a PowerPoint deck, go to Rehearse, record, and read the report. On the first visit, a one-minute tour on the Script tab points at a key line and a pause in the script itself.
 
 ## Where to look
 
@@ -35,14 +35,17 @@ Then open <http://127.0.0.1:8765>. The first run installs the Python environment
 | The one-page summary | [WRITEUP.md](WRITEUP.md) |
 | Why it's designed this way | [DECISIONS.md](DECISIONS.md) |
 | What is tested, checked by hand, and weak | [TESTING.md](TESTING.md) |
+| How the measurements compare with labelled recordings | [eval/README.md](eval/README.md), results in [eval/RESULTS.md](eval/RESULTS.md) (synthetic voice only so far) |
 | A demo walkthrough | [DEMO.md](DEMO.md) (script: [demo_speech.md](demo_speech.md)) |
 | The pitch outline | [PITCH.md](PITCH.md) |
 
 ## Run the tests
 
 ```bash
-uv run pytest            # unit tests, about 10 seconds
+uv run pytest            # unit tests, about 20 seconds
 uv run pytest -m slow    # synthetic fixture through real local speech-to-text
+uv run pytest -m browser # record, stop and read the report in Chrome with a fake microphone (needs Google Chrome, ~90 s)
+uv run python -m eval.run   # evaluation against labelled recordings -> eval/RESULTS.md (see eval/README.md)
 ```
 
 ---
@@ -62,6 +65,16 @@ uv run pytest -m slow    # synthetic fixture through real local speech-to-text
 
 All thresholds are yours to change in **Settings**. Wording in the report is "met your mark" / "diverged from your mark"; there is no score.
 
+**Settings that travel with the script.** A first line such as
+
+```
+<!-- take-two: short_pause_s=0.9 key_slower_pct=15 conventions_enabled=true -->
+```
+
+sets those thresholds for every take of that script, over the Settings dialog, so a script shared with a colleague or recorded on another machine is measured the same way. The names are the Settings field names (`short_pause_s`, `long_pause_s`, `pause_near_ratio`, `key_slower_pct`, `key_pause_after_s`, `section_tolerance_pct`, `line_min_coverage`, `baseline_min_words`, `min_silence_s`, `fuzzy_match_ratio`, `fuzzy_min_chars`, `paraphrase_min_words_pct`, `conventions_enabled`, `conventions_wpm_min`, `conventions_wpm_max`, `conventions_filler_per_100`, `emphasis_enabled`, and the `improv_…` bands). Only the first non-blank line counts; it is a comment, so it moves no line numbers. The editor says what the line sets (or what is wrong with it) as you type, the Settings dialog marks those fields, and the report lists the values that came from the script. A take with an invalid line is refused before anything is saved.
+
+**Import from PowerPoint notes** (Script tab): each slide becomes a `## Slide N: title` section and its speaker notes become the lines, ready for budgets and marks. A slide without notes stays as an empty section, shown as "no script lines" in the report. The file is read by this app on your machine and not kept.
+
 ## Rehearsing
 
 The Rehearse tab shows the script as a **teleprompter**: large type (A−/A+, remembered), `[KEY]` lines tinted, `/` and `//` as visible gaps, defined terms underlined, section headers with their budgets. The highlight follows your plan (each section's budget spread over its lines by word count), not your voice. Space / ↓ and ↑ (or a clicker's page keys) move it when you are ahead or behind, and scrolling by hand pauses the auto-scroll for a few seconds. Without budgets it is manual only. The clock, the planned-section line, the loudness meter, calibration and the upload path sit around it.
@@ -74,7 +87,8 @@ The Rehearse tab shows the script as a **teleprompter**: large type (A−/A+, re
 - Section bars: budget vs. spoken time, and for a section that ran over, **cut to fit** in words at your own median ("Methods ran 0:22 over: about 55 words at your 150 wpm"), plus the same for the whole talk.
 - The script itself with every mark marked met ✓ / close ~ / diverged ✗ / not measured –; hover, focus or click a mark for the numbers in plain words (a click also plays that moment); click any line to hear it. Optionally, **what you said vs. the script**: dropped words struck through, ad-libs boxed in place, "N words differ" per line.
 - While a take is analyzed, the page shows each stage: decoding, transcribing, aligning, definition check.
-- Takes tab: every take you recorded, and a mark-by-mark comparison across takes of the same script ("you rushed this key line in 3 of 4 takes"), with a ▶ in each cell to hear that take at that mark (A/B listening).
+- Takes tab: every take you recorded, and a mark-by-mark comparison across takes of the same script ("you rushed this key line in 3 of 4 takes"), with a ▶ in each cell to hear that take at that mark (A/B listening). Each take can be renamed, deleted (with its drills; the confirmation names the folder that will be removed) or downloaded as its folder (.zip). **Download outcomes (CSV)** gives every mark's status and numbers across your takes for a spreadsheet or a study, with no names, script text, transcript or audio in it.
+- **Export report** (report and Takes tab): the report as one HTML file with the recording inside, every number and tooltip printed, click a line to hear it. It opens offline, so you can send it to an advisor; the app asks first if it would be over 20 MB.
 - **Drill** a `[KEY]` line or a section from the report: record just that part, judged against the median of the full take it came from ("This try: 18% slower than your median from the full take; pause after 0.9 s: met your mark"). Drills are listed under their take.
 - **Load example take** (Report and Takes tabs): a synthetic-voice take of a short coral-reef script, analyzed instantly from a committed transcript. It needs no microphone and no speech model, so you can see a full report on any machine. It is labelled as synthetic and left out of comparisons.
 - A failed analysis never loses the recording: the take stays in Takes as "Not analyzed" with Retry (re-runs from the copy on disk) and Delete, and the page offers Download recording.
@@ -119,6 +133,7 @@ frontend/         Vite + TypeScript UI, built into frontend/dist and served by t
 tests/            unit tests + a synthetic TTS fixture with known ground truth (uv run pytest; -m slow for STT)
 takes/            your recordings and analyses, one folder per take (not committed)
 examples/         the example take (synthetic voice, script, committed transcript)
+eval/             evaluation harness: labelled recordings, eval.run -> RESULTS.md, eval.retest (noise floor)
 sample_script.md  a placeholder talk to try the marks on
 ```
 
@@ -128,5 +143,5 @@ sample_script.md  a placeholder talk to try the marks on
 - Words the recognizer gets slightly wrong ("leaching" for "bleaching") still match, and spoken years match digits. A line said in very different words is **paraphrased** (timed, counted in its section, but not rate-checked) when the lines around it were found and some of its own words were heard; otherwise it is reported as not found rather than scored. The thresholds are in Settings.
 - Whisper usually drops "um" and "uh"; the opt-in filler count is a lower bound.
 - The emphasis check is experimental and sensitive to microphone distance.
-- Mobile layouts are not a goal; use a laptop.
+- Mobile layouts are not a goal; use a laptop. Dark mode follows your system setting; exported reports stay light, for printing.
 - Improvise's clarity measure is the recognizer's confidence, not phoneme-level pronunciation scoring. Pitch measures need `praat-parselmouth` (installed by default); without it they show as not measurable.

@@ -92,7 +92,7 @@ This writes a template with every mark of the script and an empty status. Fill i
 | `section:Methods` | the Methods section's time budget |
 | `DEFINE:degree heating weeks` | the `[DEFINE: degree heating weeks]` mark |
 
-Use the app's own status words and judge them against the same thresholds the app uses: the defaults below, or `settings.json`.
+Use the app's own status words and judge them against the same thresholds the app uses: the defaults below, or `settings.json` and the script's settings line.
 
 | Mark | Statuses | How to decide (defaults) |
 |---|---|---|
@@ -101,7 +101,7 @@ Use the app's own status words and judge them against the same thresholds the ap
 | `section` | `met`, `over`, `under`, `not_found`, `no_budget` | From your line labels: the first line's start to the last line's end, against the budget, with a tolerance of 10 % or 3 s, whichever is larger. |
 | `DEFINE` | `defined`, `undefined`, `never_spoken` | `defined`: the term is explained at or just before its first use. `undefined`: it is used first and explained later, or never explained. `never_spoken`: it is never said. |
 
-`settings.json` takes the same keys as the app's Settings, for example `{"short_pause_s": 0.8, "key_slower_pct": 15}`. Keys you leave out keep the app's defaults.
+`settings.json` takes the same keys as the app's Settings, for example `{"short_pause_s": 0.8, "key_slower_pct": 15}`. Keys you leave out keep the app's defaults. A settings line at the top of `script.md` (`<!-- take-two: short_pause_s=0.8 -->`) wins over `settings.json`, as it does in the app, and `RESULTS.md` names both.
 
 ## What the numbers mean
 

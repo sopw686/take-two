@@ -1,10 +1,11 @@
 import { api } from "./api";
 import { clear, fmtTime, h } from "./dom";
 import { drillButton, stopDrill } from "./drill";
+import { describeOverrides } from "./editor";
 import { play as playAt, player } from "./player";
 import { state } from "./state";
 import { glyphParts, statusChip, statusGlyph, statusTone } from "./status";
-import { exampleButton } from "./takes";
+import { exampleButton, exportReport } from "./takes";
 import { timelineStrip } from "./timeline";
 import type { Analysis, DefineRow, KeyInfo, LineRow, PauseRow, SectionRow } from "./types";
 
@@ -44,7 +45,7 @@ function pauseTip(p: PauseRow): string {
 function word(s: string): string {
   return ({ met: "met your mark", near: "close to your mark", diverged: "diverged from your mark", short: "shorter than your mark",
     missing: "no pause found", unmeasurable: "not measurable", not_found: "not found", over: "over budget", under: "under budget",
-    no_budget: "no budget set", unknown: "unknown", ok: "ok" } as Record<string, string>)[s] ?? s;
+    no_budget: "no budget set", no_lines: "no script lines", unknown: "unknown", ok: "ok" } as Record<string, string>)[s] ?? s;
 }
 
 function sectionBars(a: Analysis): HTMLElement {
@@ -56,11 +57,12 @@ function sectionBars(a: Analysis): HTMLElement {
       const budgetW = s.budget_s ? (s.budget_s / maxS) * 100 : 0;
       const actualW = s.duration_s ? (s.duration_s / maxS) * 100 : 0;
       const label = s.status === "not_found" ? "not found in this take"
+        : s.status === "no_lines" ? "no script lines, so nothing to time"
         : s.status === "no_budget" ? `${s.duration_label} spoken, no budget set`
         : `${s.duration_label} spoken of ${s.budget_label} budget · ${s.delta_label} · ${word(s.status)}`;
       return h("div", { class: "section-bar", onClick: () => play(s.start) },
         h("div", { class: "section-bar-head" }, h("strong", {}, s.name),
-          h("span", { class: "muted small" }, s.status !== "no_budget" ? glyphParts(s.status, word(s.status)) : null, label)),
+          h("span", { class: "muted small" }, s.status !== "no_budget" && s.status !== "no_lines" ? glyphParts(s.status, word(s.status)) : null, label)),
         h("div", { class: "bar-track" },
           h("div", { class: "bar-budget", style: `width:${budgetW}%` }),
           h("div", { class: `bar-actual st-${s.status}`, style: `width:${actualW}%` })),
@@ -168,7 +170,10 @@ function summaryCard(a: Analysis): HTMLElement {
       a.baseline.median_source && a.baseline.median_source !== "this take"
         ? `Median from ${a.baseline.median_source}: ${a.baseline.median_wpm?.toFixed(0) ?? "none"} wpm (a drill has no median of its own); median pause in this recording ${a.baseline.median_pause_s?.toFixed(2) ?? "–"} s. `
         : `Your median this take: ${a.baseline.median_wpm?.toFixed(0) ?? "–"} wpm over ${a.baseline.lines_used} lines of ${a.baseline.min_words_per_line}+ words; median pause ${a.baseline.median_pause_s?.toFixed(2) ?? "–"} s. `,
-      `Transcribed ${a.stt.local ? "on this computer" : "by a cloud service"} with ${a.stt.model} (${a.stt.device}); pauses measured with ${a.silence_method}. Click any line or mark to hear it.`));
+      `Transcribed ${a.stt.local ? "on this computer" : "by a cloud service"} with ${a.stt.model} (${a.stt.device}); pauses measured with ${a.silence_method}. Click any line or mark to hear it.`),
+    a.settings_from_script && Object.keys(a.settings_from_script).length
+      ? h("p", { class: "muted small" }, `From the script's settings line: ${describeOverrides(a.settings_from_script)}. Every other threshold is from Settings.`)
+      : null);
 }
 
 /** How a repeated miss is described, by mark kind, as in the take comparison. */
@@ -284,7 +289,8 @@ export function renderReport(root: HTMLElement): void {
 
   const scriptEl = h("div", { class: "script-report" }, ...a.sections.flatMap((s) => {
     const head: HTMLElement = h("h2", { class: "section-head", onClick: () => play(s.start) }, s.name,
-      h("span", { class: "muted small" }, s.budget_label ? ` ${s.budget_label} budget · ${s.duration_label || "not found"} spoken` : ` ${s.duration_label || "not found"} spoken`),
+      h("span", { class: "muted small" }, s.status === "no_lines" ? " no script lines"
+        : s.budget_label ? ` ${s.budget_label} budget · ${s.duration_label || "not found"} spoken` : ` ${s.duration_label || "not found"} spoken`),
       canDrill(a) && s.line_end > s.line_start ? drillButton(a, "section", s.index, `section ${s.name}`, () => head) : null);
     return [head, ...a.lines.filter((l) => l.section === s.index).map((l) => lineEl(a, l, diff))];
   }));
@@ -301,8 +307,12 @@ export function renderReport(root: HTMLElement): void {
   const tl = timelineStrip(a, (t) => play(t));
   root.append(
     h("div", { class: "report-head" },
-      h("div", {}, h("h2", {}, a.label || "Take", h("span", { class: "muted small" }, ` · ${new Date(a.created_at).toLocaleString()} · ${fmtTime(a.duration_s)}`))),
-      reanalyzeBtn),
+      h("div", {}, h("h2", {}, a.kind === "example" ? h("span", { class: "mode-badge", title: "A text-to-speech recording shipped with the app, not a person" }, "Example · synthetic voice") : null,
+        a.label || "Take", h("span", { class: "muted small" }, ` · ${new Date(a.created_at).toLocaleString()} · ${fmtTime(a.duration_s)}`))),
+      h("div", { class: "take-actions" },
+        h("button", { class: "ghost-btn", type: "button", title: "One HTML file with the recording inside: every number and tooltip printed, click a line to hear it. Works offline.",
+          onClick: () => exportReport(a.take_id, (msg) => { headStatus.textContent = msg; }) }, "Export report"),
+        reanalyzeBtn)),
     headStatus,
     h("section", { class: "card timeline-card" }, tl.el,
       h("p", { class: "muted small" }, "Top band: silences found by the voice-activity detector. Bars: when each script line was spoken (key lines coloured by status). Ticks: where each mark was measured. Click or use ←/→ to hear that moment.")),

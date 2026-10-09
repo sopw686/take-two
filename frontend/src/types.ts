@@ -40,7 +40,7 @@ export interface Health {
   defaults: Settings;
 }
 
-export type Status = "met" | "near" | "diverged" | "short" | "missing" | "unmeasurable" | "not_found" | "over" | "under" | "no_budget" | "ok" | "unknown";
+export type Status = "met" | "near" | "diverged" | "short" | "missing" | "unmeasurable" | "not_found" | "over" | "under" | "no_budget" | "no_lines" | "ok" | "unknown";
 
 export interface WordRow { index: number; text: string; start: number | null; end: number | null; dropped?: boolean; heard?: string }
 
@@ -143,6 +143,9 @@ export interface Analysis {
   drill_summary?: string[];
   duration_s: number;
   settings: Settings;
+  /** The values set by the script's own settings line (over the Settings dialog); absent on older takes. */
+  settings_from_script?: Partial<Settings>;
+  settings_request?: Settings;
   stt: { backend: string; model: string; device: string; local: boolean };
   silence_method: string;
   baseline: { median_wpm: number | null; lines_used: number; min_words_per_line: number; median_pause_s: number | null; pauses_counted: number; median_source?: string };
@@ -364,3 +367,5 @@ export interface JobStatus {
   error: string | null;
   result?: Analysis | ImprovAnalysis;
 }
+
+export interface ScriptSettings { from_script: Partial<Settings>; error: string | null }

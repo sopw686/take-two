@@ -241,7 +241,35 @@ def new_take(mode: str, *, upload: bytes | Path, original_name: str = "", settin
     return take_id
 
 
-def delete_take(take_id: str) -> None:
+def drills_of(take_id: str) -> list[str]:
+    """Ids of the drills recorded from this take, oldest first."""
+    return sorted(d.name for d in takes_dir().iterdir()
+                  if d.is_dir() and TAKE_ID_RE.fullmatch(d.name) and d.name != take_id
+                  and (d / META).exists() and load_meta(d.name).get("drill_of") == take_id)
+
+
+def folder_bytes(take_id: str) -> int:
+    return sum(f.stat().st_size for f in take_path(take_id).rglob("*") if f.is_file())
+
+
+def set_label(take_id: str, label: str) -> dict | None:
+    """Rename a take: take.json (which every re-analysis reads) and the stored analysis, under the take's lock."""
+    with take_lock(take_id):
+        update_meta(take_id, label=label)
+        return update_analysis(take_id, lambda a: {**a, "label": label})
+
+
+def delete_take(take_id: str) -> list[str]:
+    """Delete a take's folder and its drills' folders. Returns the ids removed, drills first."""
+    gone = []
+    for drill_id in drills_of(take_id):
+        _rmtree(drill_id)
+        gone.append(drill_id)
+    _rmtree(take_id)
+    return gone + [take_id]
+
+
+def _rmtree(take_id: str) -> None:
     tdir = take_path(take_id)
     for attempt in range(8):
         try:

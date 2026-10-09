@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
-from take_two.config import Settings
+from take_two.config import ScriptSettingsError, Settings, effective_settings
 from take_two.marks import parse_script
 
 from eval import metrics
@@ -103,6 +103,12 @@ def load_recording(rdir: Path) -> Recording:
         except ValueError as exc:
             raise ValueError(f"{name}/settings.json: {exc}") from None
         source = "settings.json"
+    try:  # as in the app, a settings line at the top of the script wins over settings.json
+        settings, over = effective_settings(settings, script_text)
+    except ScriptSettingsError as exc:
+        raise ValueError(f"{name}/script.md: {exc}") from None
+    if over:
+        source += " + the script's settings line (" + " ".join(f"{k}={v}" for k, v in over.items()) + ")"
     info = json.loads(_read(rdir / "info.json")) if (rdir / "info.json").exists() else {}
     return Recording(name=name, dir=rdir, audio=find_audio(rdir), script_text=script_text, labels=labels,
                      statuses=statuses, settings=settings, settings_source=source, info=info)

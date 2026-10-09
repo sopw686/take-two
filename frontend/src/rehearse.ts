@@ -1,5 +1,6 @@
 import { runAnalysis, unsavedRecordingNote } from "./analysisRun";
 import { api } from "./api";
+import { SETTINGS_LINE } from "./editor";
 import { clear, fmtClock, h } from "./dom";
 import { Meter, extFor, pickMimeType } from "./meter";
 import { createPrompter } from "./prompter";
@@ -176,6 +177,18 @@ export function renderRehearse(root: HTMLElement, goToReport: () => void): void 
     const f = fileInput.files?.[0];
     if (f) void submit(f, f.name);
   });
+
+  // The server refuses a take whose script has a bad settings line: say so before a whole talk is recorded.
+  if (SETTINGS_LINE.test(script.split(/\r?\n/).find((l) => l.trim()) ?? "")) {
+    const signal = viewAbort.signal;
+    api.scriptSettings(script, state.effectiveSettings()).then((r) => {
+      if (signal.aborted || !r.error) return;
+      status.className = "status warn";
+      status.textContent = `Your script's settings line has a problem: ${r.error}. Fix it on the Script tab before recording; takes of this script are refused until then.`;
+      recBtn.disabled = true;
+      fileInput.disabled = true;
+    }).catch(() => { /* the server says so again when the take is sent */ });
+  }
 
   // Calibration -------------------------------------------------------------
   const calibInfo = h("p", { class: "muted small" },

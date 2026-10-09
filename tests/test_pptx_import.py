@@ -7,12 +7,10 @@ import struct
 import zipfile
 
 import pytest
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pptx import Presentation
 
 from take_two import pptx_import
-from take_two.import_routes import router
 from take_two.marks import parse_script
 from take_two.pptx_import import PptxError, neutralize_line, notes_to_script
 
@@ -278,8 +276,7 @@ def test_zip_encrypted_member(tmp_path):
 
 @pytest.fixture
 def client():
-    app = FastAPI()
-    app.include_router(router)
+    from take_two.app import app  # the real app, so the router is known to be mounted (before the static files)
     return TestClient(app, base_url="http://127.0.0.1:8765")
 
 

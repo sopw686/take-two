@@ -1,4 +1,4 @@
-import type { Analysis, CompareResult, Health, ImprovAnalysis, JobStatus, Question, QuestionsResponse, Settings, SuggestResponse, TakeSummary, Topic } from "./types";
+import type { Analysis, CompareResult, Health, ImprovAnalysis, JobStatus, Question, QuestionsResponse, ScriptSettings, Settings, SuggestResponse, TakeSummary, Topic } from "./types";
 
 /** A failed request. takeId is set when the server kept a take folder that can be retried. */
 export class ApiError extends Error {
@@ -98,7 +98,12 @@ export const api = {
     }).then((r) => j<ImprovAnalysis>(r)),
   retryTake: (takeId: string, body: { script?: string; settings?: Settings } = {}) =>
     post(`/api/takes/${takeId}/retry`, body).then((r) => j<Analysis | ImprovAnalysis>(r)),
-  deleteTake: (takeId: string) => fetch(`/api/takes/${takeId}`, { method: "DELETE" }).then((r) => j<{ deleted: string }>(r)),
+  deleteTake: (takeId: string) => fetch(`/api/takes/${takeId}`, { method: "DELETE" }).then((r) => j<{ deleted: string; drills: string[] }>(r)),
+  takeStorage: (takeId: string) => fetch(`/api/takes/${takeId}/storage`).then((r) => j<{ folder: string; bytes: number; drills: number; drill_bytes: number }>(r)),
+  renameTake: (takeId: string, label: string) =>
+    fetch(`/api/takes/${takeId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label }) })
+      .then((r) => j<{ take_id: string; label: string }>(r)),
+  exportEstimate: (takeId: string) => fetch(`/api/takes/${takeId}/export/estimate`).then((r) => j<{ bytes: number }>(r)),
   loadExample: (settings: Settings, name = "coral") => post(`/api/examples/${name}`, { settings }).then((r) => j<Analysis>(r)),
   /** Background analysis with progress: these return at once with the job; poll job(takeId). */
   startTakeJob: (audio: Blob, filename: string, script: string, settings: Settings, label = "") =>
@@ -115,5 +120,12 @@ export const api = {
   startRetryJob: (takeId: string, body: { script?: string; settings?: Settings } = {}) =>
     post(`/api/jobs/retry/${takeId}`, body).then((r) => j<JobStatus>(r)),
   job: (takeId: string) => fetch(`/api/jobs/${takeId}`).then((r) => j<JobStatus>(r)),
+  /** What the script's settings line sets, checked by the server against the dialog's settings. */
+  scriptSettings: (script: string, settings: Settings) => post("/api/script/settings", { script, settings }).then((r) => j<ScriptSettings>(r)),
+  importPptx: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    return fetch("/api/import/pptx", { method: "POST", body: fd }).then((r) => j<{ text: string; slides: number }>(r));
+  },
   compare: (takeId: string) => fetch(`/api/compare?take_id=${encodeURIComponent(takeId)}`).then((r) => j<CompareResult>(r)),
 };

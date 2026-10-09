@@ -1,5 +1,5 @@
 import "./styles.css";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 import { stopDrill } from "./drill";
 import { stopSegment } from "./player";
 import { h } from "./dom";
@@ -100,24 +100,21 @@ async function openStartupTake(): Promise<void> {
 installTipPinning();
 window.addEventListener("hashchange", render);
 (document.getElementById("settings-btn") as HTMLButtonElement).addEventListener("click", () => openSettings(async () => {
-  if (state.current === "improv" && state.improv) {
-    try {
+  let failed: unknown = null;
+  try {
+    if (state.current === "improv" && state.improv) {
       state.setImprov(await api.reanalyzeImprov(state.improv.take_id, state.effectiveSettings()));
-    } catch (err) {
-      console.warn("re-analysis after settings change failed", err);
-    }
-    render();
-    return;
-  }
-  const a = state.analysis;
-  if (a) {
-    try {
+    } else if (state.analysis) {
       // null: keep the take's own script; the editor may hold a different one.
-      state.setAnalysis(await api.reanalyze(a.take_id, null, state.effectiveSettings()));
-    } catch (err) {
-      console.warn("re-analysis after settings change failed", err);
+      state.setAnalysis(await api.reanalyze(state.analysis.take_id, null, state.effectiveSettings()));
     }
+  } catch (err) {
+    failed = err;  // e.g. the take's script sets a value the new settings clash with
   }
   render();
+  if (failed) {
+    const msg = failed instanceof ApiError ? failed.detail : (failed as Error).message;
+    main.prepend(h("p", { class: "small warn", role: "status" }, `The settings were saved, but re-analyzing the open take with them failed: ${msg}`));
+  }
 }));
 void boot();

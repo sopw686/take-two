@@ -65,12 +65,15 @@ def process_take(take_id: str, progress: Progress | None = None, settings: Setti
             if mode not in ("script", "improv"):
                 raise ValueError("this take has neither a saved script nor a topic")
             st = settings or (Settings.model_validate(meta["settings"]) if meta.get("settings") else Settings())
-            timing = _transcribe(take_id, mode, st, meta.get("timing") or {}, stage)
             if mode == "improv":
+                timing = _transcribe(take_id, mode, st, meta.get("timing") or {}, stage)
                 stage("measuring")
                 result = reanalyze_improv(take_id, st, timing=timing)
             else:
                 script = (takes.take_path(take_id) / "script.md").read_text(encoding="utf-8")
+                # The script's own settings apply from speech-to-text on: conventions change the Whisper prompt.
+                effective, _ = config.effective_settings(st, script)
+                timing = _transcribe(take_id, mode, effective, meta.get("timing") or {}, stage)
                 result = reanalyze(take_id, script, st, timing=timing, progress=stage)
         except Exception as exc:
             log.exception("take %s failed", take_id)
@@ -137,6 +140,10 @@ def _meta_fields(take_id: str, label: str | None, prev: dict) -> dict:
 
 def reanalyze(take_id: str, script_text: str, settings: Settings, label: str | None = None,
               timing: dict | None = None, progress: Progress | None = None) -> dict:
+    """Analyze a transcribed take against script_text. `settings` are the ones requested (the dialog's);
+    a settings line at the top of the script overrides them (config.ScriptSettingsError if it is invalid)."""
+    requested = settings
+    settings, from_script = config.effective_settings(requested, script_text)
     with takes.take_lock(take_id):
         tdir = takes.take_path(take_id)
         transcript = Transcript.from_dict(takes.load_json(tdir / "transcript.json"))
@@ -165,6 +172,8 @@ def reanalyze(take_id: str, script_text: str, settings: Settings, label: str | N
                                                               for i, w in enumerate(transcript.words)]},
             "audio_url": f"/takes/{take_id}/audio.wav",
             "script_key": takes.script_key(script_text),
+            "settings_request": requested.model_dump(),
+            "settings_from_script": from_script,
             "timing": timing or prev.get("timing") or takes.load_meta(take_id).get("timing") or {},
         })
         from take_two.define import check_defines, define_summary

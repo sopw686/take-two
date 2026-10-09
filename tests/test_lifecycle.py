@@ -142,11 +142,10 @@ def test_legacy_folder_with_only_the_upload(env):
     assert r.json()["lines"][0]["status"] == "ok"
 
 
-def test_retry_and_delete_refuse_busy_and_finished_takes(env):
+def test_retry_refuses_finished_takes_and_both_refuse_busy_ones(env):
     c, holder, _ = env
     done = _post_take(c).json()["take_id"]
     assert c.post(f"/api/takes/{done}/retry").status_code == 409
-    assert c.delete(f"/api/takes/{done}").status_code == 409
     tid = _fail_one(c, holder)
     takes.ACTIVE.add(tid)
     try:
@@ -519,3 +518,23 @@ def test_a_queued_retry_is_listed_as_being_processed(env, monkeypatch):
     assert row["status"] == "processing" and row["retryable"] is False and row["error"] is None
     gate.set()
     assert _wait_job(c, failed)["status"] == "done"
+
+
+def test_retry_checks_the_scripts_settings_line(env):
+    c, holder, tmp = env
+    tid = _fail_one(c, holder)
+    for url in (f"/api/takes/{tid}/retry", f"/api/jobs/retry/{tid}"):
+        r = c.post(url, json={"script": "<!-- take-two: nope=1 -->\n" + SCRIPT})
+        assert r.status_code == 400 and "nope" in r.json()["detail"]
+    assert (tmp / tid / "script.md").read_text(encoding="utf-8") == SCRIPT  # nothing saved from the refused retry
+    # A saved script whose line only works with the settings it was recorded with.
+    holder["t"] = Boom()
+    r = _post_take(c, script="<!-- take-two: improv_wpm_min=200 -->\n" + SCRIPT, settings=json.dumps({"improv_wpm_max": 250}))
+    holder["t"] = Stub()
+    assert r.status_code == 500, r.text
+    tid2 = r.json()["detail"]["take_id"]
+    r = c.post(f"/api/takes/{tid2}/retry", json={"settings": {"improv_wpm_max": 170}})
+    assert r.status_code == 400 and "improv_wpm_min must not exceed improv_wpm_max" in r.json()["detail"]
+    r = c.post(f"/api/takes/{tid2}/retry")  # the saved settings still fit
+    assert r.status_code == 200, r.text
+    assert r.json()["settings_from_script"] == {"improv_wpm_min": 200.0}

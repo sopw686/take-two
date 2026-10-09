@@ -256,6 +256,15 @@ def test_load_recording_checks_labels_and_statuses_against_the_script(tmp_path):
     assert rec.settings.short_pause_s == 0.4 and rec.settings_source == "settings.json"
 
 
+def test_the_scripts_settings_line_wins_and_is_named(tmp_path):
+    rec = ev_run.load_recording(_recording(tmp_path, settings_json='{"short_pause_s": 0.4, "long_pause_s": 2.0}',
+                                           script_md="<!-- take-two: short_pause_s=0.9 -->\n" + SMALL))
+    assert rec.settings.short_pause_s == 0.9 and rec.settings.long_pause_s == 2.0
+    assert rec.settings_source == "settings.json + the script's settings line (short_pause_s=0.9)"
+    with pytest.raises(ValueError, match="script.md: unknown setting"):
+        ev_run.load_recording(_recording(tmp_path / "b", script_md="<!-- take-two: nope=1 -->\n" + SMALL))
+
+
 def test_load_recording_reads_utf16_written_by_powershell(tmp_path):
     d = _recording(tmp_path, statuses=None)
     (d / "statuses.csv").write_bytes("mark,status\r\nKEY:L1,met\r\n".encode("utf-16"))
@@ -269,6 +278,8 @@ def test_list_marks_template_parses_back(tmp_path):
 
 
 def test_run_writes_results_without_touching_the_takes_folder(tmp_path, monkeypatch):
+    from take_two import stt
+    monkeypatch.setattr(stt, "audio_leaves_machine", lambda: False)  # whatever this machine's environment says
     d = _recording(tmp_path, info_json='{"synthetic": true, "speaker": "test voice"}')
     _, analysis = _analysis(SMALL, SPOKEN)
     analysis["stt"] = {"backend": "fake", "model": "fake", "device": "test", "local": True}

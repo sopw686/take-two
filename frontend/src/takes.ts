@@ -1,6 +1,6 @@
 import { api } from "./api";
 import { clear, fmtTime, h } from "./dom";
-import { playSegment, stopSegment } from "./player";
+import { playSegment, release, stopSegment } from "./player";
 import { state } from "./state";
 import { statusChip } from "./status";
 import type { CompareResult, TakeSummary } from "./types";
@@ -8,7 +8,7 @@ import type { CompareResult, TakeSummary } from "./types";
 function statusWord(s: string): string {
   return ({ met: "met", near: "close", diverged: "diverged", short: "short", missing: "missing", unmeasurable: "n/a",
     not_found: "not found", over: "over", under: "under", no_budget: "no budget", defined: "defined", undefined: "undefined",
-    never_spoken: "not spoken", not_checked: "n/a" } as Record<string, string>)[s] ?? s;
+    never_spoken: "not spoken", not_checked: "n/a", no_lines: "no lines" } as Record<string, string>)[s] ?? s;
 }
 
 let playing: HTMLButtonElement | null = null;
@@ -73,6 +73,51 @@ export function exampleButton(openReport: () => void, onError: (msg: string) => 
   return btn;
 }
 
+const MB = (n: number) => `${(n / 1e6).toFixed(n < 1e7 ? 1 : 0)} MB`;
+
+/** Ask, naming what goes: the take, its date, its folder, its drills. Then unload its audio and delete. */
+export async function confirmDelete(t: { take_id: string; created_at: string }, title: string, onDone: () => void,
+  onError: (msg: string) => void): Promise<void> {
+  let info;
+  try {
+    info = await api.takeStorage(t.take_id);
+  } catch (err) {
+    onError(`Could not look up the take's folder: ${(err as Error).message}`);
+    return;
+  }
+  const drills = info.drills ? `, and the ${info.drills} drill${info.drills === 1 ? "" : "s"} recorded from it (${MB(info.drill_bytes)})` : "";
+  if (!confirm(`Delete “${title}”, recorded ${new Date(t.created_at).toLocaleString()}?\n\n`
+    + `This removes its folder from disk, with the recording, transcript and analysis (${MB(info.bytes)})${drills}:\n${info.folder}\n\nThis cannot be undone.`)) return;
+  try {
+    const ids = [t.take_id];
+    const all = await api.listTakes();
+    ids.push(...all.filter((x) => x.drill_of === t.take_id).map((x) => x.take_id));
+    release(ids);
+    await api.deleteTake(t.take_id);
+    // A report of a deleted take would play nothing; fall back to the empty state.
+    if (state.analysis && (ids.includes(state.analysis.take_id))) state.setAnalysis(null);
+    if (state.improv && ids.includes(state.improv.take_id)) state.setImprov(null);
+    onDone();
+  } catch (err) {
+    onError(`Delete failed: ${(err as Error).message}`);
+  }
+}
+
+/** Download the report as one HTML file (audio inside); ask first when it would be large. */
+export async function exportReport(takeId: string, onError: (msg: string) => void): Promise<void> {
+  try {
+    const { bytes } = await api.exportEstimate(takeId);
+    if (bytes > 20e6 && !confirm(`The exported report will be about ${MB(bytes)}, because the recording is inside it. Download it?`)) return;
+  } catch (err) {
+    onError(`Could not export: ${(err as Error).message}`);
+    return;
+  }
+  const a = h("a", { href: `/api/takes/${takeId}/export.html`, download: `take-two-${takeId}.html` });
+  document.body.append(a);
+  a.click();
+  a.remove();
+}
+
 function takeTitle(t: TakeSummary): string {
   if (t.mode === "improv") return `${t.topic ?? "Improvise"}${t.label ? ` · ${t.label}` : ""}`;
   return t.label || t.take_id;
@@ -130,6 +175,31 @@ function unfinishedItem(t: TakeSummary, root: HTMLElement, openReport: () => voi
     t.status === "failed" ? h("div", { class: "take-actions" }, retry, del) : null);
 }
 
+/** Rename · Export report · Download folder · Delete, for a finished take. */
+function manageActions(t: TakeSummary, refresh: () => void, onError: (msg: string) => void): HTMLElement {
+  const title = takeTitle(t);
+  const rename = h("button", { class: "linklike small", type: "button", onClick: async () => {
+    const next = prompt("New name for this take", t.label || "");
+    if (next === null) return;
+    try {
+      const { label } = await api.renameTake(t.take_id, next);
+      if (state.analysis?.take_id === t.take_id) state.analysis.label = label;
+      if (state.improv?.take_id === t.take_id) state.improv.label = label;
+      refresh();
+    } catch (err) {
+      onError(`Rename failed: ${(err as Error).message}`);
+    }
+  } }, "Rename");
+  const del = h("button", { class: "linklike small", type: "button", onClick: () => confirmDelete(t, title, refresh, onError) }, "Delete");
+  return h("span", { class: "take-manage small" },
+    rename,
+    t.mode !== "improv" ? h("button", { class: "linklike small", type: "button", title: "One HTML file with the recording inside, to send to someone or keep.",
+      onClick: () => exportReport(t.take_id, onError) }, "Export report") : null,
+    h("a", { class: "small", href: `/api/takes/${t.take_id}/export.zip`, download: `take-two-${t.take_id}.zip`,
+      title: "The take's whole folder (and its drills'), exactly as stored." }, "Download folder"),
+    del);
+}
+
 export async function renderTakes(root: HTMLElement, openReport: () => void): Promise<void> {
   clear(root);
   root.append(h("p", { class: "muted" }, "Loading takes…"));
@@ -144,7 +214,9 @@ export async function renderTakes(root: HTMLElement, openReport: () => void): Pr
   const errLine = h("p", { class: "small warn", role: "status" });
   const head = h("div", { class: "takes-head" },
     h("p", { class: "muted small" }, "Each take keeps its audio, transcript and analysis under takes/<id>/. Open one to see its report, or re-analyze it against an edited script."),
-    exampleButton(openReport, (msg) => { errLine.textContent = msg; }));
+    exampleButton(openReport, (msg) => { errLine.textContent = msg; }),
+    h("a", { class: "ghost-btn small", href: "/api/outcomes.csv", download: "take-two-outcomes.csv",
+      title: "Every mark's status and numbers across your takes, as CSV. No names, script text, transcript or audio." }, "Download outcomes (CSV)"));
   if (!takes.length) {
     root.append(head, errLine, h("p", { class: "muted" }, "No takes yet. Record one in Rehearse, or load the example take."));
     return;
@@ -174,6 +246,7 @@ export async function renderTakes(root: HTMLElement, openReport: () => void): Pr
         openReport();
       } }, takeTitle(t)),
       h("span", { class: "muted small" }, ` ${new Date(t.created_at).toLocaleString()} · ${fmtTime(t.duration_s)}${t.stt?.model ? ` · ${t.stt.model}` : ""}`),
+      manageActions(t, () => void renderTakes(root, openReport), (msg) => { errLine.textContent = msg; }),
       h("ul", { class: "small" }, ...(t.summary ?? []).map((s) => h("li", {}, s))),
       drillsOf(t.take_id).length ? h("ul", { class: "drill-list small" }, ...drillsOf(t.take_id).map((d) => (d.status ?? "done") !== "done" ? unfinishedItem(d, root, openReport) : h("li", {},
         h("span", { class: "mode-badge" }, "Drill"),
@@ -181,6 +254,7 @@ export async function renderTakes(root: HTMLElement, openReport: () => void): Pr
           state.setTake(await api.getAnyTake(d.take_id));
           openReport();
         } }, d.label || "Drill"),
-        h("span", { class: "muted" }, ` ${new Date(d.created_at).toLocaleString()}${d.status && d.status !== "done" ? " · not analyzed" : ""}`)))) : null))),
+        h("span", { class: "muted" }, ` ${new Date(d.created_at).toLocaleString()}${d.status && d.status !== "done" ? " · not analyzed" : ""}`),
+        manageActions(d, () => void renderTakes(root, openReport), (msg) => { errLine.textContent = msg; })))) : null))),
   );
 }

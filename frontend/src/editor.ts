@@ -3,8 +3,11 @@ import { clear, esc, h } from "./dom";
 import { isSectionHeader, sections, wordCount } from "./scriptinfo";
 import { state } from "./state";
 import { openSuggest } from "./suggest";
+import { scriptTour, type Tour } from "./tour";
+import type { Settings } from "./types";
 
 const CHEATSHEET: [string, string][] = [
+  ["<!-- take-two: short_pause_s=0.9 -->", "first line only: thresholds for this script, over the Settings dialog"],
   ["## Methods [1:30]", "section with a time budget (m:ss)"],
   ["[KEY] at line start", "a key line: say it slower than your median, then pause"],
   ["word / word", "short pause (target ≥ 0.7 s)"],
@@ -13,8 +16,11 @@ const CHEATSHEET: [string, string][] = [
   ["*word*", "emphasis (experimental)"],
 ];
 
+export const SETTINGS_LINE = /^\s*<!--\s*(?:take-two|taketwo|marked)\s*:/i;
+
 function highlightLine(line: string): string {
   if (!line.trim()) return "&nbsp;";
+  if (SETTINGS_LINE.test(line)) return `<span class="hl-settings">${esc(line)}</span>`;
   if (isSectionHeader(line)) return `<span class="hl-section">${esc(line)}</span>`;
   let out = "";
   const keyMatch = /^(\s*)(\[KEY\])(\s*)/i.exec(line);
@@ -47,8 +53,38 @@ export function renderEditor(root: HTMLElement): void {
   ta.value = state.scriptText;
 
   const stats = h("div", { class: "stats" });
+  const settingsNote = h("p", { class: "small", role: "status" });
+  let checkTimer = 0;
+  let checked = "";
+  const checkSettings = () => {
+    window.clearTimeout(checkTimer);
+    checkTimer = window.setTimeout(async () => {
+      const text = ta.value;
+      if (text === checked) return;
+      checked = text;
+      // Only a script that starts with a settings line needs the server's opinion.
+      const first = text.split(/\r?\n/).find((l) => l.trim()) ?? "";
+      if (!SETTINGS_LINE.test(first)) {
+        settingsNote.textContent = "";
+        settingsNote.className = "small";
+        return;
+      }
+      try {
+        const r = await api.scriptSettings(text, state.effectiveSettings());
+        if (checked !== text) return;
+        settingsNote.className = r.error ? "small warn" : "small muted";
+        settingsNote.textContent = r.error
+          ? `Settings line: ${r.error}. Takes of this script will be refused until it is fixed.`
+          : `Settings line: ${describeOverrides(r.from_script)}. These win over the Settings dialog for takes of this script.`;
+      } catch {
+        settingsNote.textContent = "";
+      }
+    }, 300);
+  };
+  let tour: Tour | null = null;
   const refresh = () => {
-    code.innerHTML = ta.value.split(/\r?\n/).map(highlightLine).join("\n") + "\n";
+    // One span per line, so the tour can point at a line.
+    code.innerHTML = ta.value.split(/\r?\n/).map((l, i) => `<span class="hl-ln" data-ln="${i}">${highlightLine(l)}</span>`).join("\n") + "\n";
     const secs = sections(ta.value);
     const words = wordCount(ta.value);
     const budget = secs.reduce((a, s) => a + (s.budget_s ?? 0), 0);
@@ -62,6 +98,8 @@ export function renderEditor(root: HTMLElement): void {
       `≈ ${m}:${String(Math.round((est - m) * 60)).padStart(2, "0")} at ${rate ? `your median ${Math.round(rate)} wpm` : "140 wpm (estimate until you record a take)"}`,
     ];
     stats.textContent = parts.join("  ·  ");
+    checkSettings();
+    tour?.apply();
   };
   ta.addEventListener("input", () => {
     state.setScript(ta.value);
@@ -71,8 +109,6 @@ export function renderEditor(root: HTMLElement): void {
     pre.scrollTop = ta.scrollTop;
     pre.scrollLeft = ta.scrollLeft;
   });
-  refresh();
-
   const loadSample = async () => {
     if (ta.value.trim() && !confirm("Replace the current script with the sample?")) return;
     const { text } = await api.sample();
@@ -80,6 +116,30 @@ export function renderEditor(root: HTMLElement): void {
     state.setScript(text);
     refresh();
   };
+  tour = scriptTour(ta, code, loadSample);
+  refresh();
+
+  const importStatus = h("p", { class: "small warn", role: "status" });
+  const pptxInput = h("input", { type: "file", accept: ".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation", hidden: "" }) as HTMLInputElement;
+  pptxInput.addEventListener("change", async () => {
+    const f = pptxInput.files?.[0];
+    pptxInput.value = "";
+    if (!f) return;
+    importStatus.textContent = `Reading the speaker notes in ${f.name}…`;
+    try {
+      const { text, slides } = await api.importPptx(f);
+      importStatus.textContent = "";
+      if (ta.value.trim() && !confirm(`Replace the current script with the speaker notes from ${f.name} (${slides} slide${slides === 1 ? "" : "s"})?`)) return;
+      ta.value = text;
+      state.setScript(text);
+      refresh();
+      importStatus.textContent = `Imported ${slides} slide${slides === 1 ? "" : "s"} as sections. Add a [m:ss] budget to each heading and your marks.`;
+      importStatus.className = "small muted";
+    } catch (err) {
+      importStatus.className = "small warn";
+      importStatus.textContent = `Could not import ${f.name}: ${(err as Error).message}`;
+    }
+  });
 
   const suggestBtn = h("button", { class: "primary", type: "button", onClick: () => openSuggest(root, ta.value, () => renderEditor(root)) }, "Suggest marks…");
   const llm = state.health?.llm;
@@ -95,19 +155,31 @@ export function renderEditor(root: HTMLElement): void {
         h("div", { class: "toolbar" },
           h("button", { class: "ghost-btn", type: "button", onClick: loadSample }, "Load sample script"),
           h("button", { class: "ghost-btn", type: "button", onClick: () => { ta.value = ""; state.setScript(""); refresh(); } }, "Clear"),
+          h("button", { class: "ghost-btn", type: "button", title: "Each slide becomes a section; its speaker notes become the lines. Nothing is uploaded anywhere but this app.", onClick: () => pptxInput.click() }, "Import from PowerPoint notes"),
+          pptxInput,
           h("span", { class: "spacer" }),
           suggestBtn,
         ),
+        importStatus,
         h("div", { class: "editor" }, pre, ta),
         stats,
+        settingsNote,
         suggestNote,
       ),
       h("aside", { class: "cheatsheet" },
+        tour.el,
         h("h3", {}, "Marks"),
         h("p", { class: "muted small" }, "You set the targets. Nothing is judged against a universal norm unless you switch a preset on in Settings."),
         h("dl", {}, ...CHEATSHEET.flatMap(([mark, meaning]) => [h("dt", {}, h("code", {}, mark)), h("dd", {}, meaning)])),
         h("p", { class: "muted small" }, "Put spaces around / and // so km/h stays a word. Blank lines are ignored; every other line is a script line."),
+        h("button", { class: "linklike small", type: "button", onClick: () => tour?.restart() }, "Show the one-minute tour"),
       ),
     ),
   );
+}
+
+/** "short_pause_s 0.9, conventions_enabled on" */
+export function describeOverrides(over: Partial<Settings>): string {
+  const parts = Object.entries(over).map(([k, v]) => `${k} ${typeof v === "boolean" ? (v ? "on" : "off") : v}`);
+  return parts.length ? parts.join(", ") : "sets nothing";
 }

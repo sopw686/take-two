@@ -1,3 +1,4 @@
+import { api } from "./api";
 import { h } from "./dom";
 import { state } from "./state";
 import type { Settings } from "./types";
@@ -43,7 +44,7 @@ export function openSettings(onChange: () => void): void {
   const row = (f: Field) => {
     const inp = h("input", { type: "number", step: String(f.step), min: String(f.min), max: String(f.max), value: String(cur[f.key]), "data-key": f.key }) as HTMLInputElement;
     inputs.set(f.key, inp);
-    return h("label", { class: "setting" }, h("span", {}, f.label, h("small", { class: "muted" }, f.help)), inp);
+    return h("label", { class: "setting", "data-setting": f.key }, h("span", {}, f.label, h("small", { class: "muted" }, f.help)), inp);
   };
   const conv = h("input", { type: "checkbox" }) as HTMLInputElement;
   conv.checked = cur.conventions_enabled;
@@ -92,17 +93,17 @@ export function openSettings(onChange: () => void): void {
     h("p", { class: "muted small" }, "These are your targets. Change them freely; the report re-analyzes against whatever you choose."),
     h("div", { class: "settings-grid" }, ...FIELDS.map(row)),
     h("h3", {}, "Opt-in presets"),
-    h("label", { class: "setting check" }, conv, h("span", {}, "Conference talk conventions", h("small", { class: "muted" }, "Off by default. Adds an overall pace band and a filler-word rate, like choosing to code-switch for a job talk. Your marks still come first."))),
+    h("label", { class: "setting check", "data-setting": "conventions_enabled" }, conv, h("span", {}, "Conference talk conventions", h("small", { class: "muted" }, "Off by default. Adds an overall pace band and a filler-word rate, like choosing to code-switch for a job talk. Your marks still come first."))),
     h("div", { class: "settings-grid sub" },
-      h("label", { class: "setting" }, h("span", {}, "Pace band min (wpm)"), wpmMin),
-      h("label", { class: "setting" }, h("span", {}, "Pace band max (wpm)"), wpmMax),
-      h("label", { class: "setting" }, h("span", {}, "Fillers per 100 words, at most"), filler)),
-    h("label", { class: "setting check" }, emph, h("span", {}, "Emphasis check for *word* (experimental)", h("small", { class: "muted" }, "Compares a word's loudness and pitch with the rest of its line. Unreliable on quiet microphones."))),
+      h("label", { class: "setting", "data-setting": "conventions_wpm_min" }, h("span", {}, "Pace band min (wpm)"), wpmMin),
+      h("label", { class: "setting", "data-setting": "conventions_wpm_max" }, h("span", {}, "Pace band max (wpm)"), wpmMax),
+      h("label", { class: "setting", "data-setting": "conventions_filler_per_100" }, h("span", {}, "Fillers per 100 words, at most"), filler)),
+    h("label", { class: "setting check", "data-setting": "emphasis_enabled" }, emph, h("span", {}, "Emphasis check for *word* (experimental)", h("small", { class: "muted" }, "Compares a word's loudness and pitch with the rest of its line. Unreliable on quiet microphones."))),
     h("h3", {}, "Improvise reference bands"),
     h("p", { class: "muted small" }, "Improvise has no marks, so it compares each take with these bands. They are starting points, not rules; set them to what you are practising for."),
     h("div", { class: "settings-grid" },
-      h("label", { class: "setting" }, h("span", {}, "Pace band min (wpm)"), iwMin),
-      h("label", { class: "setting" }, h("span", {}, "Pace band max (wpm)"), iwMax),
+      h("label", { class: "setting", "data-setting": "improv_wpm_min" }, h("span", {}, "Pace band min (wpm)"), iwMin),
+      h("label", { class: "setting", "data-setting": "improv_wpm_max" }, h("span", {}, "Pace band max (wpm)"), iwMax),
       ...IMPROV_FIELDS.map(row)),
     h("div", { class: "dialog-actions" },
       h("button", { class: "ghost-btn", type: "button", onClick: reset }, "Reset to defaults"),
@@ -113,4 +114,21 @@ export function openSettings(onChange: () => void): void {
   document.body.append(dlg);
   dlg.addEventListener("close", () => dlg.remove());
   dlg.showModal();
+  // The script's settings line wins over these fields for takes of that script: say which, and with what value.
+  if (state.scriptText.trim()) {
+    api.scriptSettings(state.scriptText, cur).then((r) => {
+      const intro = dlg.querySelector("p");
+      if (r.error) {
+        intro?.after(h("p", { class: "small warn" }, `Your script's settings line has a problem: ${r.error}.`));
+        return;
+      }
+      const keys = Object.keys(r.from_script);
+      if (!keys.length) return;
+      intro?.after(h("p", { class: "small muted" }, `Your script's first line sets ${keys.length} of these; they are marked below and win over this dialog for takes of that script.`));
+      for (const [k, v] of Object.entries(r.from_script)) {
+        const span = dlg.querySelector(`[data-setting="${k}"] > span`);
+        span?.append(h("small", { class: "script-badge" }, `Script sets ${typeof v === "boolean" ? (v ? "on" : "off") : v}`));
+      }
+    }).catch(() => { /* the badges are a convenience */ });
+  }
 }

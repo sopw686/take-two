@@ -50,3 +50,13 @@ export function stopSegment(): void {
   segment++;
   player().pause();
 }
+
+/** Unload the player if it holds one of these takes' audio: the server cannot delete a file the browser is still reading. */
+export function release(takeIds: string[]): void {
+  const p = player();
+  if (!takeIds.some((id) => p.src.includes(`/takes/${id}/`))) return;
+  segment++;
+  p.pause();
+  p.removeAttribute("src");
+  p.load();
+}

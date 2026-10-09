@@ -229,9 +229,12 @@ def drill_script(text: str, kind: str, index: int) -> tuple[str, dict]:
 
     kind "line": that line under its section's name, without the budget (one line is not
     a section's worth of time). kind "section": the section header with its budget, and
-    its lines. Raises ValueError for an index that does not exist or a section with no lines.
+    its lines. A settings line at the top of the script is kept. Raises ValueError for an
+    index that does not exist or a section with no lines.
     """
+    from take_two.config import settings_line
     script = parse_script(text)
+    keep = settings_line(text)  # the parent's settings line, so the drill is measured with the same thresholds
     if kind == "line":
         if not 0 <= index < len(script.lines):
             raise ValueError("no such line")
@@ -253,4 +256,4 @@ def drill_script(text: str, kind: str, index: int) -> tuple[str, dict]:
                 "section": sec.index, "what": f"section {sec.name or index + 1}"}
     else:
         raise ValueError("kind must be line or section")
-    return "\n".join(out) + "\n", info
+    return "\n".join(([keep.strip()] if keep else []) + out) + "\n", info

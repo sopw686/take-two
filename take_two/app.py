@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import io
 import json
 import logging
+import zipfile
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
@@ -11,7 +15,7 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
@@ -22,7 +26,24 @@ from take_two.stt import audio_leaves_machine, get_transcriber
 log = logging.getLogger("take_two")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-app = FastAPI(title="Take Two", docs_url="/api/docs", redoc_url=None)
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):  # type: ignore[no-untyped-def]
+    # Load the local model in the background so the first take doesn't pay for it.
+    async def _load() -> None:
+        try:
+            await run_in_threadpool(get_transcriber().load)  # type: ignore[attr-defined]
+            log.info("STT ready: %s", get_transcriber().describe())
+        except Exception as exc:
+            log.warning("STT warm-up failed: %s", exc)
+
+    warm = asyncio.create_task(_load())
+    yield
+    warm.cancel()  # only the await is cancelled; a load already running in its thread finishes on its own
+
+
+app = FastAPI(title="Take Two", docs_url="/api/docs", redoc_url=None, lifespan=_lifespan)
 
 # The server is local-only. Reject foreign Host headers (DNS rebinding) and cross-site writes:
 # a multipart POST needs no CORS preflight, so any web page could otherwise create takes or spend LLM credits.
@@ -49,21 +70,6 @@ def _parse_settings(raw: str | None) -> Settings:
         raise HTTPException(400, f"bad settings: {exc}") from exc
 
 
-@app.on_event("startup")
-async def _warm() -> None:
-    # Load the local model in the background so the first take doesn't pay for it.
-    import asyncio
-
-    async def _load() -> None:
-        try:
-            await run_in_threadpool(get_transcriber().load)  # type: ignore[attr-defined]
-            log.info("STT ready: %s", get_transcriber().describe())
-        except Exception as exc:
-            log.warning("STT warm-up failed: %s", exc)
-
-    asyncio.create_task(_load())
-
-
 @app.get("/api/health")
 async def health() -> dict:
     from take_two.llm import llm_status
@@ -87,12 +93,36 @@ async def _new_script_take(audio: UploadFile, script: str, settings: str | None,
     script = script.replace("\r\n", "\n")
     if not script.strip():
         raise HTTPException(400, "script is empty")
+    _check_script_settings(script, st)
     data = await audio.read()
     if not data:
         raise HTTPException(400, "the recording is empty")
     take_id = takes.new_take("script", upload=data, original_name=audio.filename or "take.webm",
                              settings=st.model_dump(), label=label, script=script)
     return take_id, st
+
+
+def _check_script_settings(script: str, settings: Settings) -> None:
+    """400 naming the problem when the script's settings line is invalid or clashes with the request."""
+    try:
+        config.effective_settings(settings, script)
+    except config.ScriptSettingsError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class ScriptSettingsBody(BaseModel):
+    script: str
+    settings: Settings = Settings()
+
+
+@app.post("/api/script/settings")
+async def script_settings(body: ScriptSettingsBody) -> dict:
+    """What the script's settings line sets, for the editor's warning and the Settings dialog's badges."""
+    try:
+        _, from_script = config.effective_settings(body.settings, body.script)
+    except config.ScriptSettingsError as exc:
+        return {"from_script": {}, "error": str(exc)}
+    return {"from_script": from_script, "error": None}
 
 
 @app.post("/api/takes")
@@ -148,13 +178,17 @@ def _prepare_retry(take_id: str, body: RetryBody | None) -> Settings | None:
     mode = meta.get("mode") or body.mode or ("improv" if body.topic else "script" if body.script else None)
     updates: dict = {"mode": mode}
     if mode == "script":
+        requested = body.settings or (Settings.model_validate(meta["settings"]) if meta.get("settings") else Settings())
         if body.script is not None:
             script = body.script.replace("\r\n", "\n")
             if not script.strip():
                 raise HTTPException(400, "script is empty")
+            _check_script_settings(script, requested)
             (tdir / "script.md").write_text(script, encoding="utf-8")
         elif not (tdir / "script.md").exists():
             raise HTTPException(400, "this take has no saved script; send the script to retry with")
+        else:
+            _check_script_settings((tdir / "script.md").read_text(encoding="utf-8"), requested)
     elif mode == "improv":
         if not (tdir / "improv.json").exists():
             from take_two.improv_routes import check_goal, clean_topic
@@ -182,18 +216,94 @@ def _check_retryable(take_id: str) -> None:
 
 @app.delete("/api/takes/{take_id}")
 async def delete_take(take_id: str) -> dict:
+    """Delete a take's folder (audio, transcript, analysis) and the folders of its drills."""
+    _take_dir(take_id)
+    drills = takes.drills_of(take_id)
+    if any(takes.is_busy(i) for i in [take_id, *drills]):
+        raise HTTPException(409, "this take or one of its drills is being analyzed right now")
+    try:
+        gone = await run_in_threadpool(takes.delete_take, take_id)
+    except PermissionError as exc:
+        raise HTTPException(409, "a file in the take's folder is still open (is its audio playing?); try again") from exc
+    return {"deleted": take_id, "drills": [d for d in gone if d != take_id]}
+
+
+@app.get("/api/takes/{take_id}/storage")
+async def take_storage(take_id: str) -> dict:
+    """Where a take lives on disk and what deleting it removes, for the confirmation dialog."""
     tdir = _take_dir(take_id)
-    if takes.is_busy(take_id):
-        raise HTTPException(409, "this take is being analyzed right now")
-    if (tdir / "analysis.json").exists():
-        raise HTTPException(409, "only unfinished takes can be deleted")
-    await run_in_threadpool(takes.delete_take, take_id)
-    return {"deleted": take_id}
+    drills = takes.drills_of(take_id)
+    return {"folder": str(tdir.resolve()), "bytes": takes.folder_bytes(take_id), "drills": len(drills),
+            "drill_bytes": sum(takes.folder_bytes(d) for d in drills)}
+
+
+class LabelBody(BaseModel):
+    label: str
+
+
+@app.patch("/api/takes/{take_id}")
+async def rename_take(take_id: str, body: LabelBody) -> dict:
+    _take_dir(take_id)
+    label = " ".join(body.label.split())[:120]
+    await run_in_threadpool(takes.set_label, take_id, label)
+    return {"take_id": take_id, "label": label}
+
+
+@app.get("/api/takes/{take_id}/export/estimate")
+async def export_estimate(take_id: str) -> dict:
+    from take_two import export
+    _take_dir(take_id)
+    try:
+        return {"bytes": await run_in_threadpool(export.estimate_bytes, take_id)}
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.get("/api/takes/{take_id}/export.html")
+async def export_html(take_id: str) -> HTMLResponse:
+    """The report as one HTML file with the audio inside, to send to someone or keep."""
+    from take_two import export
+    _take_dir(take_id)
+    try:
+        page = await run_in_threadpool(export.report_html, take_id)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return HTMLResponse(page, headers={"Content-Disposition": f'attachment; filename="take-two-{take_id}.html"'})
+
+
+def _zip_take(take_id: str) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for tid, prefix in [(take_id, take_id), *((d, f"{take_id}/drills/{d}") for d in takes.drills_of(take_id))]:
+            root = takes.take_path(tid)
+            for f in sorted(root.rglob("*")):
+                if f.is_file() and not f.name.endswith(".tmp") and not f.name.startswith(".audio.part"):
+                    z.write(f, f"{prefix}/{f.relative_to(root).as_posix()}")
+    return buf.getvalue()
+
+
+@app.get("/api/takes/{take_id}/export.zip")
+async def export_zip(take_id: str) -> Response:
+    """The take's whole folder (and its drills'), exactly as stored."""
+    _take_dir(take_id)
+    data = await run_in_threadpool(_zip_take, take_id)
+    return Response(data, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="take-two-{take_id}.zip"'})
+
+
+@app.get("/api/outcomes.csv")
+async def outcomes_csv() -> Response:
+    """Every mark's status and numbers across your takes; no labels, script text, transcript or audio."""
+    from take_two.outcomes import outcomes_csv as build
+    return Response(await run_in_threadpool(build), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="take-two-outcomes.csv"'})
 
 
 async def _new_drill(parent_id: str, audio: UploadFile, kind: str, index: int, settings: str | None) -> tuple[str, Settings]:
-    _take_dir(parent_id)
+    tdir = _take_dir(parent_id)
     st = _parse_settings(settings)
+    if (tdir / "script.md").exists():
+        _check_script_settings((tdir / "script.md").read_text(encoding="utf-8"), st)
     data = await audio.read()
     if not data:
         raise HTTPException(400, "the recording is empty")
@@ -252,6 +362,8 @@ async def reanalyze_take(take_id: str, body: ReanalyzeBody) -> dict:
         if not p.exists():
             raise HTTPException(404, "take has no saved script")
         script = p.read_text(encoding="utf-8")
+    script = script.replace("\r\n", "\n")
+    _check_script_settings(script, body.settings)
     return await run_in_threadpool(pipeline.reanalyze, take_id, script, body.settings, body.label)
 
 
@@ -388,6 +500,11 @@ app.include_router(suggest_router)
 from take_two.improv_routes import router as improv_router  # noqa: E402
 
 app.include_router(improv_router)
+
+# ---- script import -------------------------------------------------------------
+from take_two.import_routes import router as import_router  # noqa: E402
+
+app.include_router(import_router)
 
 
 # ---- frontend ------------------------------------------------------------------
