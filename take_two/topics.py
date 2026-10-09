@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-CATEGORIES = ["Everyday", "Nature", "Opinions", "Stories", "Tech & science", "Games & fun"]
+CATEGORIES = ["Everyday", "Nature", "Opinions", "Stories", "Tech & science", "Games & fun", "Toasts & occasions"]
 
 # (topic, category, level) — level is easy / medium / hard by how much you must structure an argument.
 _TOPICS: list[tuple[str, str, str]] = [
@@ -56,6 +56,13 @@ _TOPICS: list[tuple[str, str, str]] = [
     ("Design a theme park ride", "Games & fun", "medium"),
     ("Why video games are (or aren't) art", "Games & fun", "hard"),
     ("The best snack for a long road trip", "Games & fun", "easy"),
+    ("A toast to a friend who is moving away", "Toasts & occasions", "easy"),
+    ("Thank the people who cooked tonight's dinner", "Toasts & occasions", "easy"),
+    ("A birthday toast for someone turning 80", "Toasts & occasions", "medium"),
+    ("Welcome a new colleague to the team", "Toasts & occasions", "easy"),
+    ("A retirement speech for a teacher who mattered", "Toasts & occasions", "medium"),
+    ("Toast the couple without telling an embarrassing story", "Toasts & occasions", "hard"),
+    ("A tribute to someone who taught you a skill", "Toasts & occasions", "medium"),
 ]
 
 TOPICS: list[dict] = [{"text": t, "category": c, "level": lv} for t, c, lv in _TOPICS]

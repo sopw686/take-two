@@ -38,6 +38,8 @@ uv run pytest            # unit tests, about 20 seconds
 uv run pytest -m slow    # synthetic fixture through real local speech-to-text
 uv run pytest -m browser # record, stop and read the report in Chrome with a fake microphone (needs Google Chrome, ~90 s)
 uv run python -m eval.run   # evaluation against labelled recordings -> eval/RESULTS.md (see eval/README.md)
+uv run python scripts/writeup_pdf.py           # WRITEUP.md -> WRITEUP.pdf; fails if over one page or a required section is missing
+uv run python scripts/writeup_pdf.py --watch   # rebuild the PDF every time WRITEUP.md is saved
 ```
 
 More detail: [TESTING.md](TESTING.md), [DECISIONS.md](DECISIONS.md), [eval/README.md](eval/README.md).

@@ -82,8 +82,16 @@ async def health() -> dict:
 
 
 @app.get("/api/sample")
-async def sample() -> dict:
-    return {"text": config.SAMPLE_SCRIPT.read_text(encoding="utf-8")}
+async def sample(name: str = "talk") -> dict:
+    for sid, label, path in config.SCRIPT_EXAMPLES:
+        if sid == name:
+            return {"id": sid, "label": label, "text": path.read_text(encoding="utf-8")}
+    raise HTTPException(404, f"no example script called {name}")
+
+
+@app.get("/api/samples")
+async def samples() -> list[dict]:
+    return [{"id": sid, "label": label} for sid, label, _ in config.SCRIPT_EXAMPLES]
 
 
 async def _new_script_take(audio: UploadFile, script: str, settings: str | None, label: str) -> tuple[str, Settings]:

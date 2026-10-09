@@ -126,7 +126,7 @@ export function renderRehearse(root: HTMLElement, goToReport: () => void): void 
       recBtn.classList.add("recording");
       fileInput.disabled = true;
       runPanel.replaceChildren(...[unsavedRecordingNote()].filter((x): x is HTMLElement => x !== null));
-      status.textContent = "Recording. Speak as you would in the talk.";
+      status.textContent = "Recording. Speak as you would for real.";
     } catch (err) {
       status.textContent = `Microphone unavailable: ${(err as Error).message}. You can upload a recording instead.`;
     }

@@ -41,7 +41,8 @@ const post = (url: string, body?: unknown) =>
 
 export const api = {
   health: () => fetch("/api/health").then((r) => j<Health>(r)),
-  sample: () => fetch("/api/sample").then((r) => j<{ text: string }>(r)),
+  sample: (name = "talk") => fetch(`/api/sample?name=${encodeURIComponent(name)}`).then((r) => j<{ id: string; label: string; text: string }>(r)),
+  samples: () => fetch("/api/samples").then((r) => j<{ id: string; label: string }[]>(r)),
   async createTake(audio: Blob, filename: string, script: string, settings: Settings, label = ""): Promise<Analysis> {
     const fd = new FormData();
     fd.append("audio", audio, filename);

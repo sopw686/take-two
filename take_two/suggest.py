@@ -26,13 +26,13 @@ router = APIRouter(prefix="/api/suggest")
 
 GOALS: dict[str, str] = {
     "clear": "clear and informative: the audience should follow every step. Prefer [DEFINE] marks for terms a general "
-             "audience is unlikely to know and section budgets that give methods and results their fair share.",
-    "persuasive": "persuasive / land the main finding: one central claim must land. Prefer a pause before and a long "
+             "audience is unlikely to know and section budgets that give each part its fair share.",
+    "persuasive": "persuasive / land the main point: one central claim must land. Prefer a pause before and a long "
                   "pause after the central claim, and a single [KEY] on it.",
     "somber": "somber: measured and grave. Prefer slower [KEY] lines and more long pauses (//), fewer short ones.",
     "warm": "warm / celebratory: generous and quick. Prefer fewer, shorter pauses; at most one [KEY]; avoid heavy marking.",
 }
-GOAL_LABELS = {"clear": "Clear and informative", "persuasive": "Persuasive / land the main finding",
+GOAL_LABELS = {"clear": "Clear and informative", "persuasive": "Persuasive / land the main point",
                "somber": "Somber", "warm": "Warm / celebratory"}
 
 MAX_KEY_TOTAL = 3
@@ -55,11 +55,11 @@ class Proposal(BaseModel):
     marks: list[ProposedMark] = Field(description="Ordered from most to least important. Prefer few marks.")
 
 
-SYSTEM = """You help a speaker mark up the script of a science talk with delivery intentions. The marks:
+SYSTEM = """You help a speaker mark up the script of a speech (a talk, a toast, a pitch, a poem) with delivery intentions. The marks:
 - key: a key line, delivered slower than the speaker's own median, followed by a pause. Use for the one sentence a section exists to deliver.
 - pause: a deliberate short pause (about 0.7 s) before a word. long_pause: a long pause (about 1.5 s), typically after a result sentence or before a turn in the argument.
-- define: a technical term the speaker must explain aloud at or before first use. Only for terms a general scientific audience would not know; never common words.
-- section: start a section at a line, with a short name (Introduction, Methods, Results, ...). Only propose sections if the script has none. Do not propose budgets; the app computes them.
+- define: a term the audience may not know, which the speaker must explain aloud at or before first use: a technical term, an in-joke the room would not share, or a reference. Only for terms this audience would not know; never common words.
+- section: start a section at a line, with a short name (Introduction, Methods, Results, or Opening, Story, Toast, ...). Only propose sections if the script has none. Do not propose budgets; the app computes them.
 
 Restraint matters more than coverage. Over-marking recreates generic speech-coach advice, which is exactly what this tool avoids. Prefer few marks: at most one key per section and three in total, no more than about one pause per 40 words, and only a handful of define marks. Order marks from most to least important. Every reason must be one plain sentence of at most 20 words that teaches a novice why this spot matters, grounded in the script's content.
 Marks can check pace and pauses. They cannot make a take sound sad or moving; do not claim they will."""

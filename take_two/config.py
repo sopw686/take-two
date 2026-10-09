@@ -15,6 +15,13 @@ TAKES_DIR = Path(os.environ.get("TAKE_TWO_TAKES_DIR", ROOT / "takes"))
 FRONTEND_DIST = ROOT / "frontend" / "dist"
 SAMPLE_SCRIPT = ROOT / "sample_script.md"
 EXAMPLES_DIR = ROOT / "examples"
+# Scripts offered under "Start from an example" on the Script tab: (id, label, file). The toast and the poem were written for the demo.
+SCRIPT_EXAMPLES: list[tuple[str, str, Path]] = [
+    ("talk", "Science talk: coral reefs (placeholder)", SAMPLE_SCRIPT),
+    ("toast", "Wedding toast (written for the demo)", EXAMPLES_DIR / "scripts" / "toast.md"),
+    ("slam", "Slam poem (written for the demo)", EXAMPLES_DIR / "scripts" / "slam_poem.md"),
+    ("demo", "The demo speech: a talk about Take Two", ROOT / "demo_speech.md"),
+]
 
 STT_BACKEND = os.environ.get("TAKE_TWO_STT", "local")  # local | openai
 STT_MODEL = os.environ.get("TAKE_TWO_STT_MODEL", "small.en")

@@ -4,15 +4,15 @@
 
 ## The problem
 
-Every speech coach on the market grades you against one universal standard: even pace, no filler, don't be monotone. PowerPoint's Speaker Coach, Yoodli, Orai all do it. The standard is not wrong, it is just not *yours*. None of these tools know what you meant to do. They cannot tell a deliberate pause from dead air, or the sentence your whole talk exists to deliver from a transition. So the feedback a scientist gets on a thesis defense rehearsal is the same feedback a wedding toast gets.
+Every speech coach on the market grades you against one universal standard: even pace, no filler, don't be monotone. PowerPoint's Speaker Coach, Yoodli, Orai all do it. The standard is not wrong, it is just not *yours*. None of these tools know what you meant to do. They cannot tell a deliberate pause from dead air, or the sentence your whole talk exists to deliver from a transition. So the feedback on a thesis defense rehearsal is the same feedback a wedding toast gets, and the same a slam poem gets.
 
-Good speakers vary on purpose. They slow down for the key result. They stop and let it land. A coach that scores "even pace" penalizes exactly that.
+Good speakers vary on purpose. A deliberate pause is the whole point of a toast's punchline, a poem's line break, or the sentence a talk exists to deliver. A coach that scores "even pace" penalizes exactly that, and the speaker can't catch it either: nobody can hear their own pace while speaking.
 
-And the failures that actually sink science talks are specific: rushing the one sentence with the finding in it, never pausing after it, saying jargon aloud without defining it, and letting methods run over until the conclusion is squeezed into thirty seconds. Generic tools miss all four.
+The failures that actually sink a speech are specific to it. A talk rushes the one sentence with the finding in it and never pauses after it, uses a term nobody in the room knows, and lets methods run over until the conclusion is squeezed into thirty seconds. A toast steps on its own laugh. A poem runs through the line break that was meant to be a breath. A pitch mumbles the number. Generic tools miss all of these.
 
 ## How marking solves it
 
-Performers mark their scripts. Slam poets, actors, singers: *slow here*, *breathe here*, *hit this word*. Take Two brings that to talks with six marks a user can learn in a minute: a section with a time budget, a `[KEY]` line, a short or long pause, a term that must be defined aloud, and an experimental emphasis mark.
+Performers mark their scripts. Slam poets, actors, singers: *slow here*, *breathe here*, *hit this word*. Take Two brings that to anyone speaking from a script, with six marks a user can learn in a minute: a section with a time budget, a `[KEY]` line, a short or long pause, a term that must be explained aloud (a technical term, an in-joke the toast has to set up, a reference in a poem), and an experimental emphasis mark. The marks describe intent, not a style, so the same six serve a lecture and a toast.
 
 You mark the script with your intent. You rehearse out loud. The report shows the script itself, with every mark colored met, close, or diverged *from your own mark*, with the measured number behind each one and the audio a click away. "18 % slower than your median: met." "0.2 s of silence against your 0.7 s mark." "'Convolution' was first spoken at 1:05 and not defined before that." There is no score.
 
@@ -28,7 +28,14 @@ Everything is measured, not judged. Word timestamps from local speech recognitio
 
 ## Who it is for
 
-Students and researchers presenting science: conference talks, thesis defenses, poster pitches, three-minute-thesis competitions. They rehearse alone, often anxious, often in a second language, with dense content and a hard time limit. They know what they want the talk to do; they need to know whether their mouth did it.
+Anyone who needs to land an idea out loud, in this order:
+
+- **Technical and academic talks:** conference talks, thesis defenses, three-minute-thesis pitches. Landing it means the key result said slower and followed by silence, and every term explained before the room needs it.
+- **Celebratory speeches:** toasts, tributes, eulogies. Landing it means the pause after the punchline for the room to react, and the sincere last line not rushed.
+- **Performance poetry and slam:** landing it means the breath at the line break and the drop before the last line.
+- **Pitches and interviews:** landing it means the number and the ask said slowly enough to be heard, inside the time limit.
+
+Most of them rehearse alone, often anxious, sometimes in a second language, against a clock. They know what they want the speech to do; they need to know whether their mouth did it.
 
 > TODO (Sophie): real user feedback, if any. Do not invent quotes.
 

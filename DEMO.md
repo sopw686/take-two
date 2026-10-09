@@ -2,9 +2,11 @@
 
 `demo_speech.md` is a two-minute talk about Take Two, marked up with Take Two's own marks. I perform it into the app, and then the report shows how I did on it. So the pitch and the demo are the same thing.
 
+Take Two is for anyone who has to land an idea out loud, not only scientists. If the audience isn't technical, say so in the first line ("a toast, a poem, a pitch or a talk") and keep the toast or the slam poem one click away: Script tab → **Start from an example**. Both were written for this demo and say so.
+
 ## Before the demo
 
-1. Run `.\run.ps1`, open http://127.0.0.1:8765, and paste `demo_speech.md` into the Script tab.
+1. Run `.\run.ps1`, open http://127.0.0.1:8765, and load the speech on the Script tab (**Start from an example** → *The demo speech*, or paste `demo_speech.md`).
 2. Do one practice take and adjust the section time budgets to fit my actual pace.
 3. Record a backup take with the planned mistakes below and leave it in Takes, in case the live one fails.
 4. Set the teleprompter text size (A−/A+) and close any other tabs using the microphone.
@@ -92,7 +94,7 @@ Scroll up to the section bars.
 
 ## 2:30 – The novice path
 
-Script tab. Click **Clear**, paste an unmarked paragraph or two (any talk), click **Suggest marks…**, pick *Persuasive / land the main finding*, Suggest.
+Script tab. Click **Clear**, paste an unmarked paragraph or two (any talk), click **Suggest marks…**, pick *Persuasive / land the main point*, Suggest.
 
 > "If you don't know how to mark a script yet, you describe what you want the talk to do and get a handful of proposed marks, each with a reason. They're dashed: nothing is applied until I accept it."
 

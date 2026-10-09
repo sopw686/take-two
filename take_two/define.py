@@ -144,8 +144,9 @@ class DefineJudgements(BaseModel):
 
 
 SYSTEM = (
-    "You read the transcript of a rehearsed science talk. For each listed term, decide whether the speaker "
-    "explained its meaning ALOUD at or before the first time they said it. Explaining means giving a meaning a "
+    "You read the transcript of a rehearsed speech (a talk, a toast, a pitch, a poem). For each listed term, decide whether the speaker "
+    "explained its meaning ALOUD at or before the first time they said it. A term may be a technical word, an "
+    "in-joke the audience would not share, or a reference they may not know. Explaining means giving a meaning a "
     "general audience could follow: a definition, a paraphrase, or an example that makes the meaning clear. "
     "Merely using the term, or explaining it only much later, does not count. Quote the exact transcript words "
     "that do the explaining; copy them verbatim. Be strict and brief."

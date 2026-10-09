@@ -1,4 +1,4 @@
-"""Defense Q&A: likely audience questions about the speaker's own script.
+"""Q&A practice: likely audience questions about the speaker's own script (a talk, a defense, a pitch).
 
 The model reads the script text only (never audio) and proposes questions, each
 tagged and tied to the script line it is about. Code drops anything it cannot
@@ -32,7 +32,7 @@ class QuestionsOutput(BaseModel):
     questions: list[ProposedQuestion] = Field(description="Five to eight questions, the most likely first.")
 
 
-SYSTEM = """You help a scientist prepare for the questions after a talk or a thesis defense. You receive the script of the talk (text only). Propose five to eight questions a knowledgeable audience is likely to ask, the most likely first. Mix four kinds and tag each: clarification (a term, number or step that may be unclear), methods challenge (how it was done, whether it could be biased or confounded), limitation (what the work cannot show or where it may not hold), implication (what follows from it, what comes next). Each question must give the 0-based index of the script line it is about, and must be a single question of at most 200 characters, phrased the way a person would ask it out loud. Ask; do not answer. Do not grade or praise the talk."""
+SYSTEM = """You help a speaker prepare for the audience's questions after a talk, a thesis defense, a pitch or an interview. You receive the script of what they will say (text only). Propose five to eight questions a knowledgeable audience is likely to ask, the most likely first. Mix four kinds and tag each: clarification (a term, number or step that may be unclear), methods challenge (how it was done or how they know, whether it could be biased or confounded), limitation (what the work cannot show or where it may not hold), implication (what follows from it, what comes next). Each question must give the 0-based index of the script line it is about, and must be a single question of at most 200 characters, phrased the way a person would ask it out loud. Ask; do not answer. Do not grade or praise the script."""
 
 
 def build_user_prompt(script: Script) -> str:

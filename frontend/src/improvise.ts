@@ -164,7 +164,7 @@ export async function renderImprovise(root: HTMLElement, goToReport: () => void)
   if (questionsCache && questionsCache.script === script) showQuestions(questionsCache.questions, questionsCache.note);
   else if (prefs.question?.tag) showQuestions([prefs.question], "The question you picked last time.");
   const questionsPanel = h("div", { class: "questions-panel" },
-    h("p", { class: "muted small" }, "Practise the questions after your talk. Pick one the model proposes from the script on your Script tab, or type a question you expect. Your answer is an Improvise take on that question."),
+    h("p", { class: "muted small" }, "Practise the questions after your talk, pitch, defense or interview. Pick one the model proposes from the script on your Script tab, or type a question you expect. Your answer is an Improvise take on that question."),
     h("div", { class: "toolbar" }, genBtn, genReason ? h("span", { class: "muted small" }, genReason) : null),
     qNote, qList, qCustom);
   const catChips = h("div", { class: "chips" }, ...["All", ...categories].map((c) => {

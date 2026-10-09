@@ -8,7 +8,7 @@ import type { Suggestion, SuggestResponse } from "./types";
 
 const GOALS: { id: string; label: string; hint: string }[] = [
   { id: "clear", label: "Clear and informative", hint: "define terms, give sections budgets" },
-  { id: "persuasive", label: "Persuasive / land the main finding", hint: "a pause before and after the central claim" },
+  { id: "persuasive", label: "Persuasive / land the main point", hint: "a pause before and after the central claim" },
   { id: "somber", label: "Somber", hint: "slower key lines, more long pauses" },
   { id: "warm", label: "Warm / celebratory", hint: "fewer, shorter pauses" },
 ];
@@ -16,7 +16,7 @@ const HONESTY = "Marks can check your pace and pauses. They can't tell whether a
 
 export function openSuggest(root: HTMLElement, script: string, onDone: () => void): void {
   const dlg = h("dialog", { class: "settings-dialog" }) as HTMLDialogElement;
-  const notes = h("textarea", { rows: "2", placeholder: "Anything else? e.g. “the audience is clinicians”, “the ending must land”", class: "label-input", style: "width:100%" }) as HTMLTextAreaElement;
+  const notes = h("textarea", { rows: "2", placeholder: "Anything else? e.g. “the audience is clinicians”, “the room is mostly family”, “the ending must land”", class: "label-input", style: "width:100%" }) as HTMLTextAreaElement;
   const target = h("input", { type: "text", placeholder: "m:ss (optional)", class: "label-input", style: "width:120px" }) as HTMLInputElement;
   const goalInputs = GOALS.map((g, i) => {
     const inp = h("input", { type: "radio", name: "goal", value: g.id }) as HTMLInputElement;
@@ -42,7 +42,7 @@ export function openSuggest(root: HTMLElement, script: string, onDone: () => voi
   });
   dlg.append(
     h("h2", {}, "Suggest marks"),
-    h("p", { class: "muted small" }, "Pick what you want the talk to do. The model reads only the script text and proposes a small number of marks, each with a one-line reason. You accept or reject every one."),
+    h("p", { class: "muted small" }, "Pick what you want the speech to do. The model reads only the script text and proposes a small number of marks, each with a one-line reason. You accept or reject every one."),
     h("div", { class: "goal-grid" }, ...goalInputs.map(({ g, inp }) => h("label", {}, inp, h("span", {}, g.label, h("small", {}, g.hint))))),
     h("label", { class: "small" }, "Notes for the model (optional)", notes),
     h("label", { class: "small", style: "display:block;margin-top:8px" }, "Target total length ", target),

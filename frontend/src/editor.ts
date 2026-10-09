@@ -12,7 +12,7 @@ const CHEATSHEET: [string, string][] = [
   ["[KEY] at line start", "a key line: say it slower than your median, then pause"],
   ["word / word", "short pause (target ≥ 0.7 s)"],
   ["word // word", "long pause (target ≥ 1.5 s)"],
-  ["[DEFINE: term]", "the term must be explained aloud at or before its first use"],
+  ["[DEFINE: term]", "a term your audience may not know (technical word, in-joke, reference): explain it aloud at or before its first use"],
   ["*word*", "emphasis (experimental)"],
 ];
 
@@ -109,14 +109,23 @@ export function renderEditor(root: HTMLElement): void {
     pre.scrollTop = ta.scrollTop;
     pre.scrollLeft = ta.scrollLeft;
   });
-  const loadSample = async () => {
-    if (ta.value.trim() && !confirm("Replace the current script with the sample?")) return;
-    const { text } = await api.sample();
-    ta.value = text;
-    state.setScript(text);
+  const loadSample = async (name = "talk") => {
+    const ex = await api.sample(name);
+    if (ta.value.trim() && !confirm(`Replace the current script with the example (${ex.label})?`)) return;
+    ta.value = ex.text;
+    state.setScript(ex.text);
     refresh();
   };
-  tour = scriptTour(ta, code, loadSample);
+  // "Start from an example": the science talk, plus a toast and a poem written for the demo.
+  const examplePick = h("select", { class: "label-input", "aria-label": "Start from an example" },
+    h("option", { value: "" }, "Start from an example…")) as HTMLSelectElement;
+  api.samples().then((list) => list.forEach((x) => examplePick.append(h("option", { value: x.id }, x.label)))).catch(() => undefined);
+  examplePick.addEventListener("change", async () => {
+    const name = examplePick.value;
+    examplePick.value = "";
+    if (name) await loadSample(name);
+  });
+  tour = scriptTour(ta, code, () => loadSample("talk"));
   refresh();
 
   const importStatus = h("p", { class: "small warn", role: "status" });
@@ -153,7 +162,7 @@ export function renderEditor(root: HTMLElement): void {
     h("div", { class: "editor-layout" },
       h("div", { class: "editor-main" },
         h("div", { class: "toolbar" },
-          h("button", { class: "ghost-btn", type: "button", onClick: loadSample }, "Load sample script"),
+          examplePick,
           h("button", { class: "ghost-btn", type: "button", onClick: () => { ta.value = ""; state.setScript(""); refresh(); } }, "Clear"),
           h("button", { class: "ghost-btn", type: "button", title: "Each slide becomes a section; its speaker notes become the lines. Nothing is uploaded anywhere but this app.", onClick: () => pptxInput.click() }, "Import from PowerPoint notes"),
           pptxInput,
