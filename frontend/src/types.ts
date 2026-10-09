@@ -119,6 +119,8 @@ export interface Analysis {
   take_id: string;
   created_at: string;
   label: string;
+  kind?: "take" | "drill" | "example";
+  example?: string;
   duration_s: number;
   settings: Settings;
   stt: { backend: string; model: string; device: string; local: boolean };
@@ -175,12 +177,20 @@ export interface CoachingReport {
 export interface TakeSummary {
   take_id: string;
   created_at: string;
-  duration_s: number;
-  summary: string[];
+  duration_s: number | null;
+  summary?: string[];
   label: string;
-  stt: { backend: string; model: string };
+  stt?: { backend?: string; model?: string };
   mode?: "script" | "improv";
   topic?: string | null;
+  kind?: "take" | "drill" | "example";
+  drill_of?: string | null;
+  /** done: analyzed; processing / failed: the folder holds an upload that has not been analyzed. */
+  status?: "done" | "processing" | "failed";
+  stage?: string | null;
+  error?: string | null;
+  retryable?: boolean;
+  needs_script?: boolean;
 }
 
 export interface Suggestion {
@@ -286,6 +296,7 @@ export interface ImprovAnalysis {
   take_id: string;
   created_at: string;
   label: string;
+  kind?: "take" | "drill" | "example";
   topic: string;
   goal_s: number | null;
   content: boolean;

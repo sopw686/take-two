@@ -23,7 +23,8 @@ export function stripLineMarks(line: string): string {
 
 export function sections(text: string): SectionInfo[] {
   const out: SectionInfo[] = [];
-  const cleaned = text.replace(/<!--[\s\S]*?-->/g, "");
+  // Blank comments but keep their newlines, as the server's parser does, so line numbers stay stable.
+  const cleaned = text.replace(/<!--[\s\S]*?-->/g, (m) => "\n".repeat(m.split("\n").length - 1));
   cleaned.split(/\r?\n/).forEach((line, i) => {
     if (!line.trim()) return;
     const m = line.trimStart().startsWith("##") ? SECTION_RE.exec(line) : null;

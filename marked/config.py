@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TAKES_DIR = Path(os.environ.get("MARKED_TAKES_DIR", ROOT / "takes"))
 FRONTEND_DIST = ROOT / "frontend" / "dist"
 SAMPLE_SCRIPT = ROOT / "sample_script.md"
+EXAMPLES_DIR = ROOT / "examples"
 
 STT_BACKEND = os.environ.get("MARKED_STT", "local")  # local | openai
 STT_MODEL = os.environ.get("MARKED_STT_MODEL", "small.en")

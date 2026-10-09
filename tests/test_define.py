@@ -114,3 +114,62 @@ def test_llm_spoken_flag_does_not_override_measured_occurrence():
         term="entropy", spoken=False, defined_at_or_before_first_use=False)]))
     rows = check_defines(script, tr, llm)
     assert rows[0]["status"] == "undefined" and rows[0]["first_spoken_at"] is not None
+
+
+# ---- cache of the model's judgements -------------------------------------------------
+
+def _defined(quote="a measure of disorder"):
+    return DefineJudgements(judgements=[DefineJudgement(term="entropy", spoken=True, defined_at_or_before_first_use=True,
+                                                        evidence_quote=quote)])
+
+
+def test_llm_result_is_cached_per_terms_text_and_model(tmp_path):
+    script = parse_script("[DEFINE: entropy] text")
+    tr = make_transcript("entropy that is a measure of disorder went up")
+    llm = FakeLLM(_defined())
+    llm.model = "m1"
+    for _ in range(3):
+        rows = check_defines(script, tr, llm, cache_dir=tmp_path)
+    assert llm.calls == 1 and rows[0]["method"] == "llm" and rows[0]["status"] == "defined"
+    check_defines(script, make_transcript("entropy that is a measure of disorder went down"), llm, cache_dir=tmp_path)
+    assert llm.calls == 2  # new transcript text
+    check_defines(parse_script("[DEFINE: entropy] [DEFINE: disorder] text"), tr, llm, cache_dir=tmp_path)
+    assert llm.calls == 3  # new terms
+    llm.model = "m2"
+    check_defines(script, tr, llm, cache_dir=tmp_path)
+    assert llm.calls == 4  # another model
+
+
+def test_cache_key_changes_with_the_prompt(tmp_path, monkeypatch):
+    import marked.define as d
+    script = parse_script("[DEFINE: entropy] text")
+    tr = make_transcript("entropy that is a measure of disorder went up")
+    llm = FakeLLM(_defined())
+    check_defines(script, tr, llm, cache_dir=tmp_path)
+    monkeypatch.setattr(d, "PROMPT_VERSION", "changed")
+    check_defines(script, tr, llm, cache_dir=tmp_path)
+    assert llm.calls == 2
+
+
+def test_failed_or_absent_model_writes_no_cache(tmp_path):
+    from marked.define import CACHE_FILE
+    from marked.llm.base import NullLLM
+    script = parse_script("[DEFINE: entropy] text")
+    tr = make_transcript("entropy which is disorder")
+    check_defines(script, tr, FakeLLM(None), cache_dir=tmp_path)
+    check_defines(script, tr, NullLLM(), cache_dir=tmp_path)
+    assert not (tmp_path / CACHE_FILE).exists()
+
+
+def test_cached_judgements_are_validated_again(tmp_path):
+    import json
+    from marked.define import CACHE_FILE
+    script = parse_script("[DEFINE: entropy] text")
+    tr = make_transcript("entropy that is a measure of disorder went up")
+    llm = FakeLLM(_defined())
+    assert check_defines(script, tr, llm, cache_dir=tmp_path)[0]["method"] == "llm"
+    data = json.loads((tmp_path / CACHE_FILE).read_text(encoding="utf-8"))
+    data["judgements"]["judgements"][0]["evidence_quote"] = "words nobody said"
+    (tmp_path / CACHE_FILE).write_text(json.dumps(data), encoding="utf-8")
+    rows = check_defines(script, tr, llm, cache_dir=tmp_path)
+    assert llm.calls == 1 and rows[0]["method"] == "heuristic"

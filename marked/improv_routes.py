@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import tempfile
-from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
@@ -48,29 +46,36 @@ async def topics() -> dict:
     return {"categories": CATEGORIES, "topics": TOPICS}
 
 
-@router.post("")
-async def create(audio: UploadFile = File(...), topic: str = Form(...), goal_s: float | None = Form(None),
-                 content: bool = Form(False), settings: str | None = Form(None), label: str = Form("")) -> dict:
-    st = _settings(settings)
+def clean_topic(topic: str) -> str:
     topic = " ".join(topic.split())
     if not topic:
         raise HTTPException(400, "topic is empty")
     if len(topic) > MAX_TOPIC:
         raise HTTPException(400, f"topic is longer than {MAX_TOPIC} characters")
+    return topic
+
+
+def check_goal(goal_s: float | None) -> float | None:
     if goal_s is not None and not (GOAL_RANGE[0] <= goal_s <= GOAL_RANGE[1]):
         raise HTTPException(400, f"goal must be between {GOAL_RANGE[0]:.0f} and {GOAL_RANGE[1]:.0f} seconds")
-    suffix = Path(audio.filename or "").suffix or ".webm"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(await audio.read())
-        tmp_path = Path(tmp.name)
-    try:
-        return await run_in_threadpool(pipeline.run_improv, tmp_path, topic, goal_s, content, st, label,
-                                       audio.filename or "")
-    except Exception as exc:
-        log.exception("improv take failed")
-        raise HTTPException(500, f"analysis failed: {exc}") from exc
-    finally:
-        tmp_path.unlink(missing_ok=True)
+    return goal_s
+
+
+@router.post("")
+async def create(audio: UploadFile = File(...), topic: str = Form(...), goal_s: float | None = Form(None),
+                 content: bool = Form(False), settings: str | None = Form(None), label: str = Form("")) -> dict:
+    from marked.app import process
+
+    st = _settings(settings)
+    topic = clean_topic(topic)
+    check_goal(goal_s)
+    data = await audio.read()
+    if not data:
+        raise HTTPException(400, "the recording is empty")
+    take_id = takes.new_take("improv", upload=data, original_name=audio.filename or "take.webm",
+                             settings=st.model_dump(), label=label,
+                             improv={"topic": topic, "goal_s": goal_s, "content": content})
+    return await process(take_id, st)
 
 
 class ReanalyzeBody(BaseModel):
@@ -81,6 +86,8 @@ class ReanalyzeBody(BaseModel):
 @router.post("/{take_id}/reanalyze")
 async def reanalyze(take_id: str, body: ReanalyzeBody) -> dict:
     _improv_take(take_id)
+    if takes.is_busy(take_id):
+        raise HTTPException(409, "this take is being analyzed right now")
     return await run_in_threadpool(pipeline.reanalyze_improv, take_id, body.settings, body.label)
 
 
@@ -100,12 +107,19 @@ async def coach(take_id: str, body: CoachBody | None = None) -> dict:
     transcript = Transcript.from_dict(takes.load_json(tdir / "transcript.json"))
     history = takes.improv_history(take_id)
     res = await run_in_threadpool(coach_improv, data, transcript, get_llm(), history, content)
-    data.update(res)
-    if not content:
-        data.pop("content_review", None)
-    data["content"] = content
-    meta = takes.load_json(tdir / "improv.json")
-    meta["content"] = content
-    takes.save_json(tdir / "improv.json", meta)
-    takes.save_json(tdir / "analysis.json", data)
-    return data
+
+    def attach(current: dict) -> dict | None:
+        if current.get("settings") != data.get("settings"):
+            return None  # re-analyzed under other bands while the model answered; its numbers win
+        current.update(res)
+        if not content:
+            current.pop("content_review", None)
+        current["content"] = content
+        return current
+    def save() -> dict | None:
+        with takes.take_lock(take_id):
+            meta = takes.load_json(tdir / "improv.json")
+            meta["content"] = content
+            takes.save_json(tdir / "improv.json", meta)
+            return takes.update_analysis(take_id, attach)
+    return (await run_in_threadpool(save)) or data

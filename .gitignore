@@ -8,3 +8,4 @@ takes/*
 !takes/.gitkeep
 .env
 *.egg-info/
+.devtakes/

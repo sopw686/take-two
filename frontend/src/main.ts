@@ -66,15 +66,28 @@ async function boot(): Promise<void> {
       /* server down; editor stays empty */
     }
   }
+  if (!state.analysis && !state.improv) await openStartupTake();
+  render();
+}
+
+/** The take this browser last opened, else the newest finished take on disk (a fresh browser should not say "No take yet"). */
+async function openStartupTake(): Promise<void> {
   const last = state.lastTakeId();
-  if (last && !state.analysis && !state.improv) {
+  if (last) {
     try {
       state.setTake(await api.getAnyTake(last));
+      return;
     } catch {
-      /* take may have been deleted */
+      /* deleted, or never finished */
     }
   }
-  render();
+  try {
+    const done = (await api.listTakes()).filter((t) => (t.status ?? "done") === "done" && t.kind !== "drill");
+    const pick = done.find((t) => (t.kind ?? "take") === "take") ?? done[0];
+    if (pick) state.setTake(await api.getAnyTake(pick.take_id));
+  } catch {
+    /* server down: the report shows its empty state */
+  }
 }
 
 window.addEventListener("hashchange", render);

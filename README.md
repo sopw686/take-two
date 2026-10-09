@@ -26,6 +26,7 @@ Everything runs locally by default. Audio never leaves your computer unless you 
 | `OPENAI_API_KEY` + `MARKED_STT=openai` | Transcribe with OpenAI's Whisper API instead of locally. The UI shows a banner when audio leaves the machine. |
 | `MARKED_STT_MODEL` | Local model: `base.en` (faster), `small.en` (default), `medium.en`, … |
 | `MARKED_STT_DEVICE` | `auto` (default), `cuda`, or `cpu`. |
+| `MARKED_TAKES_DIR` | Where takes are saved (default `takes/` next to the app). If that folder is inside a cloud-synced folder (OneDrive, Dropbox, iCloud), the sync client uploads your recordings; point this at a local folder to keep audio on the machine. |
 | `MARKED_LLM=fake` | Development only: a labelled stand-in model so the suggestion UI can be tried without a key. Not a fallback; without it and without a key, suggestions stay off. |
 
 ## Mark syntax
@@ -47,6 +48,8 @@ All thresholds are yours to change in **Settings**. Wording in the report is "me
 - Section bars: budget vs. spoken time.
 - The script itself with every mark colored met / close / diverged; hover for the numbers in plain words; click any line or mark to hear that moment.
 - Takes tab: every take you recorded, and a mark-by-mark comparison across takes of the same script ("you rushed this key line in 3 of 4 takes").
+- **Load example take** (Report and Takes tabs): a synthetic-voice take of a short coral-reef script, analyzed instantly from a committed transcript. It needs no microphone and no speech model, so you can see a full report on any machine. It is labelled as synthetic and left out of comparisons.
+- A failed analysis never loses the recording: the take stays in Takes as "Not analyzed" with Retry (re-runs from the copy on disk) and Delete, and the page offers Download recording.
 - Optional, only when switched on in Settings: a "conference conventions" preset (overall pace band, filler words per 100) and an experimental emphasis check for `*word*`.
 - With an API key: "Suggestions based on your measurements", at most three, each citing a measured number and the mark it concerns.
 
@@ -83,6 +86,7 @@ marked/           FastAPI backend: parser, STT adapters, VAD, alignment, analysi
 frontend/         Vite + TypeScript UI, built into frontend/dist and served by the backend
 tests/            unit tests + a synthetic TTS fixture with known ground truth (uv run pytest; -m slow for STT)
 takes/            your recordings and analyses, one folder per take (not committed)
+examples/         the example take (synthetic voice, script, committed transcript)
 sample_script.md  a placeholder talk to try the marks on
 ```
 

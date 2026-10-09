@@ -2,7 +2,7 @@
 
 `demo_speech.md` is a ~2-minute talk *about* Marked, written in Marked's own marks (4 timed sections, 3 `[KEY]` lines, 9 pauses, 2 `[DEFINE]` terms, 233 words). You perform it into the app, so the demo is the pitch and the report grades the pitch.
 
-**Setup.** `.un.ps1`, open http://127.0.0.1:8765, paste `demo_speech.md` on the Script tab. Do one practice take first so the budgets fit your pace (edit them; they are yours).
+**Setup.** `.\run.ps1`, open http://127.0.0.1:8765, paste `demo_speech.md` on the Script tab. Do one practice take first so the budgets fit your pace (edit them; they are yours).
 
 **Planted divergences.** Deliver the speech well except for these two spots, so the report has something to show:
 
@@ -25,7 +25,7 @@ For the 2–3 minute video, cut the performance to its first section plus the ir
 
 # Alternate demo: coral reef sample (3–4 minutes)
 
-Before the demo: run `.\run.ps1`, open http://127.0.0.1:8765, load the sample script, and record one take in which you **rush the first `[KEY]` line in Results**, skip the `/` in "deploy shading, to pause tourism, / and to collect", never explain "degree heating weeks", and talk through Methods slowly enough to run it over 0:50. Keep that take open on the Report tab. (If you cannot record live, upload `tests/fixtures/fixture.wav` with `tests/fixtures/fixture_script.md` as the script; it was built to show the same four things.)
+Before the demo: run `.\run.ps1`, open http://127.0.0.1:8765, load the sample script, and record one take in which you **rush the first `[KEY]` line in Results**, skip the `/` in "deploy shading, to pause tourism, / and to collect", never explain "degree heating weeks", and talk through Methods slowly enough to run it over 0:50. Keep that take open on the Report tab. (If you cannot record live, click **Load example take** on the Report or Takes tab: a synthetic-voice take of the fixture script, built to show the same four things, analyzed instantly with no microphone and no speech model. It is labelled "Example take (synthetic voice)"; say so on stage.)
 
 ## 0:00 – The thing generic coaches cannot do
 
@@ -82,5 +82,7 @@ Stop.
 ## If something goes wrong
 
 - Transcription slow: `MARKED_STT_MODEL=base.en` and restart.
-- Microphone blocked: use the upload path with a phone recording.
+- Microphone blocked: use the upload path with a phone recording, or **Load example take** (no microphone, no speech model, labelled as a synthetic voice).
+- Analysis failed after a take: the recording is not lost. Click **Retry** (it re-runs from the copy saved on disk) or **Download recording**. The take also stays in Takes as "Not analyzed" with Retry and Delete.
+- Fresh browser on the demo laptop: the Report tab opens the newest finished take on disk, so it never starts on "No take yet" if you recorded earlier.
 - No API key: the Suggest button is disabled with a one-line note; everything else works. Say so and skip to Rehearse.

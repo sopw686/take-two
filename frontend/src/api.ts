@@ -1,18 +1,35 @@
 import type { Analysis, CompareResult, Health, ImprovAnalysis, Settings, SuggestResponse, TakeSummary, Topic } from "./types";
 
+/** A failed request. takeId is set when the server kept a take folder that can be retried. */
+export class ApiError extends Error {
+  constructor(readonly detail: string, readonly status: number, readonly takeId: string | null = null) {
+    super(`${status}: ${detail}`);
+  }
+}
+
 async function j<T>(r: Response): Promise<T> {
   if (!r.ok) {
     let detail = r.statusText;
+    let takeId: string | null = null;
     try {
       const body = await r.json();
-      detail = body.detail || JSON.stringify(body);
+      const d = body.detail;
+      if (typeof d === "string") detail = d;
+      else if (Array.isArray(d)) detail = d.map((x: { msg?: string }) => x.msg ?? JSON.stringify(x)).join("; ");
+      else if (d && typeof d === "object") {
+        detail = d.message ?? JSON.stringify(d);
+        takeId = d.take_id ?? null;
+      } else detail = JSON.stringify(body);
     } catch {
       /* ignore */
     }
-    throw new Error(`${r.status}: ${detail}`);
+    throw new ApiError(detail, r.status, takeId);
   }
   return r.json() as Promise<T>;
 }
+
+const post = (url: string, body?: unknown) =>
+  fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}) });
 
 export const api = {
   health: () => fetch("/api/health").then((r) => j<Health>(r)),
@@ -71,5 +88,9 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(content === undefined ? {} : { content }),
     }).then((r) => j<ImprovAnalysis>(r)),
+  retryTake: (takeId: string, body: { script?: string; settings?: Settings } = {}) =>
+    post(`/api/takes/${takeId}/retry`, body).then((r) => j<Analysis | ImprovAnalysis>(r)),
+  deleteTake: (takeId: string) => fetch(`/api/takes/${takeId}`, { method: "DELETE" }).then((r) => j<{ deleted: string }>(r)),
+  loadExample: (settings: Settings, name = "coral") => post(`/api/examples/${name}`, { settings }).then((r) => j<Analysis>(r)),
   compare: (takeId: string) => fetch(`/api/compare?take_id=${encodeURIComponent(takeId)}`).then((r) => j<CompareResult>(r)),
 };

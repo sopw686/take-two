@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-import tempfile
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -88,17 +88,115 @@ async def create_take(audio: UploadFile = File(...), script: str = Form(...), se
     script = script.replace("\r\n", "\n")
     if not script.strip():
         raise HTTPException(400, "script is empty")
-    suffix = Path(audio.filename or "").suffix or ".webm"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(await audio.read())
-        tmp_path = Path(tmp.name)
+    data = await audio.read()
+    if not data:
+        raise HTTPException(400, "the recording is empty")
+    # The folder (upload, script, settings) exists before any processing, so a failure can be retried.
+    take_id = takes.new_take("script", upload=data, original_name=audio.filename or "take.webm",
+                             settings=st.model_dump(), label=label, script=script)
+    return await process(take_id, st)
+
+
+async def process(take_id: str, settings: Settings | None = None) -> dict:
+    """Run pipeline.process_take in a worker thread; failures carry the take id so the client can retry."""
     try:
-        return await run_in_threadpool(pipeline.run_take, tmp_path, script, st, label, audio.filename or "")
-    except Exception as exc:
-        log.exception("take failed")
-        raise HTTPException(500, f"analysis failed: {exc}") from exc
-    finally:
-        tmp_path.unlink(missing_ok=True)
+        return await run_in_threadpool(pipeline.process_take, take_id, None, settings)
+    except takes.Busy:
+        raise HTTPException(409, "this take is already being analyzed")
+    except pipeline.TakeFailed as exc:
+        raise HTTPException(500, detail={"message": exc.message, "take_id": take_id}) from exc
+
+
+def _take_dir(take_id: str) -> Path:
+    try:
+        tdir = takes.take_path(take_id)
+    except ValueError:
+        raise HTTPException(400, "bad take id")
+    if not tdir.is_dir():
+        raise HTTPException(404, "take not found")
+    return tdir
+
+
+class RetryBody(BaseModel):
+    mode: Literal["script", "improv"] | None = None  # only needed for folders that saved neither
+    script: str | None = None
+    topic: str | None = None
+    goal_s: float | None = None
+    content: bool = False
+    settings: Settings | None = None
+    label: str | None = None
+
+
+@app.post("/api/takes/{take_id}/retry")
+async def retry_take(take_id: str, body: RetryBody | None = None) -> dict:
+    """Run a failed take again from its saved upload, resuming at the first stage whose output is missing."""
+    tdir = _take_dir(take_id)
+    body = body or RetryBody()
+    _check_retryable(take_id)
+    meta = takes.load_meta(take_id)
+    mode = meta.get("mode") or body.mode or ("improv" if body.topic else "script" if body.script else None)
+    updates: dict = {"mode": mode}
+    if mode == "script":
+        if body.script is not None:
+            script = body.script.replace("\r\n", "\n")
+            if not script.strip():
+                raise HTTPException(400, "script is empty")
+            (tdir / "script.md").write_text(script, encoding="utf-8")
+        elif not (tdir / "script.md").exists():
+            raise HTTPException(400, "this take has no saved script; send the script to retry with")
+    elif mode == "improv":
+        if not (tdir / "improv.json").exists():
+            from marked.improv_routes import check_goal, clean_topic
+            takes.save_json(tdir / "improv.json", {"topic": clean_topic(body.topic or ""), "goal_s": check_goal(body.goal_s),
+                                                   "content": body.content})
+    else:
+        raise HTTPException(400, "this take saved neither a script nor a topic; send one to retry with")
+    if body.settings is not None:
+        updates["settings"] = body.settings.model_dump()
+    if body.label is not None:
+        updates["label"] = body.label
+    takes.update_meta(take_id, **updates)
+    return await process(take_id, body.settings)
+
+
+def _check_retryable(take_id: str) -> None:
+    st = takes.take_status(take_id)
+    if st["status"] == "done":
+        raise HTTPException(409, "this take is already analyzed")
+    if takes.is_busy(take_id) or st["status"] == "processing":
+        raise HTTPException(409, "this take is being analyzed right now")
+    if not st["retryable"]:
+        raise HTTPException(400, "the original recording is missing, so this take can only be deleted")
+
+
+@app.delete("/api/takes/{take_id}")
+async def delete_take(take_id: str) -> dict:
+    tdir = _take_dir(take_id)
+    if takes.is_busy(take_id):
+        raise HTTPException(409, "this take is being analyzed right now")
+    if (tdir / "analysis.json").exists():
+        raise HTTPException(409, "only unfinished takes can be deleted")
+    await run_in_threadpool(takes.delete_take, take_id)
+    return {"deleted": take_id}
+
+
+class ExampleBody(BaseModel):
+    settings: Settings = Settings()
+
+
+@app.post("/api/examples/{name}")
+async def load_example(name: str, body: ExampleBody | None = None) -> dict:
+    """A copy of a shipped example take, analyzed from its committed transcript (no microphone, no speech model)."""
+    if name not in EXAMPLES:
+        raise HTTPException(404, "no such example")
+    settings = (body or ExampleBody()).settings
+    try:
+        return await run_in_threadpool(pipeline.create_example, name, settings)
+    except pipeline.TakeFailed as exc:
+        raise HTTPException(500, detail={"message": exc.message, "take_id": exc.take_id}) from exc
+
+
+EXAMPLES = ("coral",)
 
 
 class ReanalyzeBody(BaseModel):
@@ -109,12 +207,11 @@ class ReanalyzeBody(BaseModel):
 
 @app.post("/api/takes/{take_id}/reanalyze")
 async def reanalyze_take(take_id: str, body: ReanalyzeBody) -> dict:
-    try:
-        tdir = takes.take_path(take_id)
-    except ValueError:
-        raise HTTPException(400, "bad take id")
-    if not (tdir / "transcript.json").exists():
-        raise HTTPException(404, "take not found")
+    tdir = _take_dir(take_id)
+    if not (tdir / "analysis.json").exists() or not (tdir / "transcript.json").exists():
+        raise HTTPException(409, "this take has not been analyzed yet; retry it instead")
+    if takes.is_busy(take_id):
+        raise HTTPException(409, "this take is being analyzed right now")
     _reject_improv(take_id)
     script = body.script
     if script is None:
@@ -164,9 +261,15 @@ async def coach_take(take_id: str) -> dict:
         raise HTTPException(404, "take not found")
     _reject_improv(take_id, data)
     earlier = [a for a in takes.takes_with_same_script(take_id) if a.get("take_id") != take_id]
-    data["coaching"] = await run_in_threadpool(coach, data, get_llm(), earlier)
-    takes.save_json(takes.take_path(take_id) / "analysis.json", data)
-    return data
+    coaching = await run_in_threadpool(coach, data, get_llm(), earlier)
+
+    def attach(current: dict) -> dict | None:
+        # A re-analysis may have finished while the model was answering; its numbers win.
+        if current.get("settings") != data.get("settings") or current.get("script_key") != data.get("script_key"):
+            return None
+        current["coaching"] = coaching
+        return current
+    return (await run_in_threadpool(takes.update_analysis, take_id, attach)) or data
 
 
 @app.get("/api/compare")

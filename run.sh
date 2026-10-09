@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run Marked (macOS / Linux / Git Bash). See run.ps1 for the Windows version.
 #   ./run.sh              start on http://127.0.0.1:8765
-#   REBUILD=1 ./run.sh    force a frontend rebuild
+#   REBUILD=1 ./run.sh    force a frontend rebuild (it also rebuilds by itself when sources are newer than the build)
 #   MARKED_STT_DEVICE=cpu ./run.sh
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -13,7 +13,14 @@ else
   uv sync
 fi
 
-if [ -n "${REBUILD:-}" ] || [ ! -f frontend/dist/index.html ]; then
+# Rebuild when any frontend source is newer than the last build, so a pulled or edited UI is never served stale.
+stale=""
+if [ -f frontend/dist/index.html ] && \
+   [ -n "$(find frontend/src frontend/index.html frontend/package.json -newer frontend/dist/index.html -print 2>/dev/null | head -n 1)" ]; then
+  echo "Frontend sources changed since the last build; rebuilding."
+  stale=1
+fi
+if [ -n "${REBUILD:-}" ] || [ -n "$stale" ] || [ ! -f frontend/dist/index.html ]; then
   if command -v npm >/dev/null; then
     (cd frontend && { [ -d node_modules ] || npm install --no-audit --no-fund; } && npm run build)
   else

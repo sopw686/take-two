@@ -1,11 +1,12 @@
 /** Improvise: pick a topic and a time goal, think for a moment, speak unscripted, get coached.
  *  No script and no marks; the report compares the take with editable reference bands. */
 
+import { runAnalysis, unsavedRecordingNote } from "./analysisRun";
 import { api } from "./api";
 import { clear, fmtClock, h } from "./dom";
 import { Recorder, showLevel } from "./recorder";
 import { state } from "./state";
-import type { Topic } from "./types";
+import type { ImprovAnalysis, Topic } from "./types";
 
 const PREFS_KEY = "marked.improv";
 const GOALS = [30, 60, 120, 180, 300];
@@ -139,29 +140,36 @@ export async function renderImprovise(root: HTMLElement, goToReport: () => void)
   }));
 
   const labelInput = h("input", { type: "text", placeholder: "Label this take (optional)", class: "label-input" }) as HTMLInputElement;
-  const status = h("p", { class: "status muted" }, "");
+  const status = h("p", { class: "status muted", role: "status" }, "");
+  const runPanel = h("div", { class: "run-panel" }, unsavedRecordingNote());
   const startBtn = h("button", { class: "primary big", type: "button" }, "Start") as HTMLButtonElement;
   startBtn.addEventListener("click", () => void runSession());
 
   const fileInput = h("input", { type: "file", accept: "audio/*,.webm,.wav,.m4a,.mp3,.ogg" }) as HTMLInputElement;
   fileInput.addEventListener("change", () => {
     const f = fileInput.files?.[0];
-    if (f) void submit(f, f.name, status, () => fileInput.removeAttribute("disabled"));
+    if (!f) return;
+    fileInput.setAttribute("disabled", "");
+    void submit(f, f.name, runPanel, () => fileInput.removeAttribute("disabled"));
   });
 
-  async function submit(blob: Blob, filename: string, statusEl: HTMLElement, onFail: () => void): Promise<void> {
-    statusEl.textContent = state.health?.audio_leaves_machine
-      ? "Transcribing with the configured cloud service…"
-      : `Transcribing and measuring on this computer (${state.health?.stt.model ?? "local model"})…`;
-    try {
-      const content = prefs.content && !!llm?.available;
-      const a = await api.createImprov(blob, filename, currentTopic(), prefs.goal_s, content, state.effectiveSettings(), labelInput.value.trim());
-      state.setImprov(a);
-      goToReport();
-    } catch (err) {
-      statusEl.textContent = `Analysis failed: ${(err as Error).message}`;
-      onFail();
-    }
+  async function submit(blob: Blob, filename: string, host: HTMLElement, onFail: () => void): Promise<void> {
+    const content = prefs.content && !!llm?.available;
+    const topic = currentTopic();
+    const label = labelInput.value.trim();
+    const settings = state.effectiveSettings();
+    const ok = await runAnalysis({
+      host, blob, filename,
+      message: state.health?.audio_leaves_machine
+        ? "Transcribing with the configured cloud service…"
+        : `Transcribing and measuring on this computer (${state.health?.stt.model ?? "local model"})…`,
+      start: () => api.createImprov(blob, filename, topic, prefs.goal_s, content, settings, label),
+      retry: (id) => api.retryTake(id, { settings }) as Promise<ImprovAnalysis>,
+      open: (a) => state.setImprov(a),
+      goToReport,
+      onAbandon: () => void renderImprovise(root, goToReport),
+    });
+    if (!ok) onFail();
   }
 
   // ---- the session: prep countdown, then recording against the goal ------------------------
@@ -171,7 +179,8 @@ export async function renderImprovise(root: HTMLElement, goToReport: () => void)
     const goal = prefs.goal_s;
     const big = h("div", { class: "clock" }, "");
     const phase = h("div", { class: "phase muted" }, "");
-    const hint = h("p", { class: "status muted" }, "");
+    const hint = h("p", { class: "status muted", role: "status" }, "");
+    const livePanel = h("div", { class: "run-panel" });
     const bar = h("div", { class: "goal-fill" });
     const meterBar = h("div", { class: "meter-fill" });
     const meterLabel = h("div", { class: "meter-label muted small" }, "");
@@ -184,6 +193,7 @@ export async function renderImprovise(root: HTMLElement, goToReport: () => void)
       h("div", { class: "goal-track" }, bar),
       hint,
       h("div", { class: "live-actions" }, skipBtn, stopBtn, cancelBtn),
+      livePanel,
       h("div", { class: "meter" }, h("div", { class: "meter-track" }, h("div", { class: "meter-baseline" }), meterBar), meterLabel));
     stopBtn.hidden = true;
     clear(root).append(panel);
@@ -236,9 +246,10 @@ export async function renderImprovise(root: HTMLElement, goToReport: () => void)
       stopBtn.textContent = "Analyzing…";
       const { blob, filename } = await rec.stop();
       active = null;
-      await submit(blob, filename, hint, () => {
-        stopBtn.textContent = "Analysis failed";
-        cancelBtn.removeAttribute("disabled");
+      hint.textContent = "";
+      await submit(blob, filename, livePanel, () => {
+        stopBtn.hidden = true;
+        cancelBtn.hidden = true;
       });
     };
     stopBtn.addEventListener("click", () => void finish());
@@ -268,7 +279,7 @@ export async function renderImprovise(root: HTMLElement, goToReport: () => void)
         h("section", { class: "card" }, h("h3", {}, "Thinking time"), prepChips,
           h("p", { class: "muted small" }, "A short pause to choose an opening line before the clock starts."))),
       h("section", { class: "card" }, h("h3", {}, "Coaching"), modes),
-      h("div", { class: "rec-panel" }, startBtn, labelInput, status),
+      h("div", { class: "rec-panel" }, startBtn, labelInput, status, runPanel),
       h("details", { class: "card" }, h("summary", {}, "…or upload a recording on this topic"),
         h("p", { class: "muted small" }, "Any audio file works (webm, wav, m4a, mp3)."), fileInput),
       h("p", { class: "muted small" }, "What gets measured: time against your goal, pace, filler words, long pauses and restarts, hedges (“I think”, “kind of”), "

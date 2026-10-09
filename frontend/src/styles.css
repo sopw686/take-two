@@ -235,3 +235,17 @@ details.card summary { cursor: pointer; font-family: var(--serif); font-size: 17
   .improv-options, .metric-grid, .metric-cols { grid-template-columns: 1fr; }
   .live-topic { font-size: 24px; }
 }
+
+/* analysis runs, failed takes, example take */
+.run-panel { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+.run-panel:empty { display: none; }
+.run-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; }
+.run-actions:empty { display: none; }
+a.ghost-btn { text-decoration: none; display: inline-block; }
+.status.warn { color: var(--div); }
+.takes-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.take-list li.unfinished { border-left: 3px solid var(--near); padding-left: 10px; }
+.take-title { font-family: var(--serif); font-size: 16px; }
+.take-actions { display: flex; gap: 8px; }
+.mode-badge.warn-badge { color: var(--near); border-color: #ecd3ad; background: var(--near-bg); }
+.empty-state { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }

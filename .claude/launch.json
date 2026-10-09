@@ -4,8 +4,29 @@
     {
       "name": "marked",
       "runtimeExecutable": "uv",
-      "runtimeArgs": ["run", "uvicorn", "marked.app:app", "--host", "127.0.0.1", "--port", "8765", "--reload", "--reload-dir", "marked"],
+      "runtimeArgs": [
+        "run",
+        "uvicorn",
+        "marked.app:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8765",
+        "--reload",
+        "--reload-dir",
+        "marked"
+      ],
       "port": 8765
+    },
+    {
+      "name": "marked-dev",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-Command",
+        "$env:MARKED_TAKES_DIR='.devtakes'; uv run uvicorn marked.app:app --host 127.0.0.1 --port 8766 --reload --reload-dir marked"
+      ],
+      "port": 8766
     }
   ]
 }

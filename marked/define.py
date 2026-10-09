@@ -6,13 +6,21 @@ as such in the UI). With an LLM configured, the model reads the transcript
 TEXT only and returns a judgement plus an exact quote; code then verifies the
 quote exists in the transcript and attaches timestamps to it. An unverifiable
 quote falls back to the heuristic. The model never hears audio.
+
+The model's raw judgements are cached in the take folder, keyed by the terms,
+the transcript text, the provider/model and the prompt, so re-analysis (every
+Settings change) does not pay for another call. Validation re-runs on every
+read: the cache only saves the call, never the checks.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from marked.marks import Script, normalize_word
 from marked.stt.base import Transcript
@@ -144,10 +152,36 @@ SYSTEM = (
 )
 
 
-def llm_check(terms: list[str], transcript: Transcript, flat: _Flat, llm) -> dict[str, dict]:
+PROMPT_VERSION = hashlib.sha1(SYSTEM.encode("utf-8")).hexdigest()[:8]
+CACHE_FILE = "defines_llm.json"
+
+
+def cache_key(terms: list[str], transcript: Transcript, llm) -> str:
+    payload = {"terms": sorted({t.strip().lower() for t in terms}), "text": transcript.text,
+               "provider": getattr(llm, "name", ""), "model": getattr(llm, "model", ""), "prompt": PROMPT_VERSION}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def _ask_llm(terms: list[str], transcript: Transcript, llm, cache_dir: Path | None) -> DefineJudgements | None:
+    key = cache_key(terms, transcript, llm) if cache_dir is not None else None
+    if cache_dir is not None:
+        try:
+            cached = json.loads((cache_dir / CACHE_FILE).read_text(encoding="utf-8"))
+            if cached.get("key") == key:
+                return DefineJudgements.model_validate(cached["judgements"])
+        except (OSError, ValueError, KeyError, ValidationError):
+            pass
     user = ("Transcript:\n\"\"\"\n" + transcript.text + "\n\"\"\"\n\nTerms: " + "; ".join(terms) +
             "\n\nReturn one judgement per term, in the same order.")
     out = llm.complete_structured(SYSTEM, user, DefineJudgements, max_tokens=16000)
+    if out is not None and cache_dir is not None:  # a failed call is not cached, so the next re-analysis tries again
+        from marked.takes import save_json
+        save_json(cache_dir / CACHE_FILE, {"key": key, "judgements": out.model_dump()})
+    return out
+
+
+def llm_check(terms: list[str], transcript: Transcript, flat: _Flat, llm, cache_dir: Path | None = None) -> dict[str, dict]:
+    out = _ask_llm(terms, transcript, llm, cache_dir)
     results: dict[str, dict] = {}
     if out is None:
         return results
@@ -181,7 +215,7 @@ def llm_check(terms: list[str], transcript: Transcript, flat: _Flat, llm) -> dic
     return results
 
 
-def check_defines(script: Script, transcript: Transcript, llm=None) -> list[dict]:
+def check_defines(script: Script, transcript: Transcript, llm=None, cache_dir: Path | None = None) -> list[dict]:
     if not script.defines:
         return []
     flat = _Flat(transcript)
@@ -189,7 +223,7 @@ def check_defines(script: Script, transcript: Transcript, llm=None) -> list[dict
     llm_results: dict[str, dict] = {}
     if llm is not None and getattr(llm, "available", False):
         try:
-            llm_results = llm_check([d.term for d in script.defines], transcript, flat, llm)
+            llm_results = llm_check([d.term for d in script.defines], transcript, flat, llm, cache_dir)
         except Exception as exc:  # never let a cloud failure break the report
             log.warning("LLM define check failed: %s", exc)
             llm_results = {}

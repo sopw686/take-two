@@ -1,8 +1,10 @@
+import { runAnalysis, unsavedRecordingNote } from "./analysisRun";
 import { api } from "./api";
 import { clear, fmtClock, h } from "./dom";
 import { Meter, extFor, pickMimeType } from "./meter";
 import { plannedSectionAt, sections } from "./scriptinfo";
 import { state } from "./state";
+import type { Analysis } from "./types";
 
 let stream: MediaStream | null = null;
 let recorder: MediaRecorder | null = null;
@@ -40,7 +42,8 @@ export function renderRehearse(root: HTMLElement, goToReport: () => void): void 
   const meterBar = h("div", { class: "meter-fill" });
   const meterLabel = h("div", { class: "meter-label muted small" }, "");
   const meterWrap = h("div", { class: "meter" }, h("div", { class: "meter-track" }, h("div", { class: "meter-baseline" }), meterBar), meterLabel);
-  const status = h("p", { class: "status muted" }, "");
+  const status = h("p", { class: "status muted", role: "status" }, "");
+  const runPanel = h("div", { class: "run-panel" }, unsavedRecordingNote());
   const recBtn = h("button", { class: "primary big", type: "button" }, "Start recording") as HTMLButtonElement;
   const labelInput = h("input", { type: "text", placeholder: "Label this take (optional)", class: "label-input" }) as HTMLInputElement;
 
@@ -105,6 +108,8 @@ export function renderRehearse(root: HTMLElement, goToReport: () => void): void 
       timer = window.setInterval(updatePlanned, 200);
       recBtn.textContent = "Stop and analyze";
       recBtn.classList.add("recording");
+      fileInput.disabled = true;
+      runPanel.replaceChildren(...[unsavedRecordingNote()].filter((x): x is HTMLElement => x !== null));
       status.textContent = "Recording. Speak as you would in the talk.";
     } catch (err) {
       status.textContent = `Microphone unavailable: ${(err as Error).message}. You can upload a recording instead.`;
@@ -113,17 +118,42 @@ export function renderRehearse(root: HTMLElement, goToReport: () => void): void 
 
   async function submit(blob: Blob, filename: string): Promise<void> {
     recBtn.setAttribute("disabled", "");
+    fileInput.disabled = true;
     recBtn.textContent = "Analyzing…";
-    status.textContent = state.health?.audio_leaves_machine
-      ? "Transcribing with the configured cloud service…"
-      : `Transcribing on this computer (${state.health?.stt.model ?? "local model"})…`;
-    try {
-      const analysis = await api.createTake(blob, filename, state.scriptText, state.effectiveSettings(), labelInput.value.trim());
-      state.setAnalysis(analysis);
-      goToReport();
-    } catch (err) {
-      status.textContent = `Analysis failed: ${(err as Error).message}`;
+    status.textContent = "";
+    const label = labelInput.value.trim();
+    const settings = state.effectiveSettings();
+    const ok = await runAnalysis({
+      host: runPanel, blob, filename,
+      message: state.health?.audio_leaves_machine
+        ? "Transcribing with the configured cloud service…"
+        : `Transcribing on this computer (${state.health?.stt.model ?? "local model"})…`,
+      start: () => api.createTake(blob, filename, script, settings, label),
+      retry: async (id) => {
+        recBtn.setAttribute("disabled", "");
+        fileInput.disabled = true;
+        try {
+          return await (api.retryTake(id, { settings }) as Promise<Analysis>);
+        } catch (err) {
+          recBtn.removeAttribute("disabled");
+          fileInput.disabled = false;
+          throw err;
+        }
+      },
+      open: (a) => state.setAnalysis(a),
+      goToReport,
+      onAbandon: () => {
+        if (recorder?.state === "recording") {
+          recorder.onstop = null;
+          recorder.stop();
+        }
+        closeAll();
+        renderRehearse(root, goToReport);
+      },
+    });
+    if (!ok) {
       recBtn.removeAttribute("disabled");
+      fileInput.disabled = false;
       recBtn.textContent = "Start recording";
       recBtn.classList.remove("recording");
     }
@@ -232,7 +262,7 @@ export function renderRehearse(root: HTMLElement, goToReport: () => void): void 
   root.append(
     h("div", { class: "rehearse-layout" },
       h("div", { class: "rehearse-main" },
-        h("div", { class: "rec-panel" }, clock, planned, recBtn, labelInput, status),
+        h("div", { class: "rec-panel" }, clock, planned, recBtn, labelInput, status, runPanel),
         h("div", { class: "meter-panel" }, h("h3", {}, "Loudness"), meterWrap, pacePanel),
         h("div", { class: "upload-panel" },
           h("h3", {}, "…or upload a recording"),

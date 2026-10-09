@@ -1,6 +1,7 @@
 import { api } from "./api";
 import { clear, fmtTime, h } from "./dom";
 import { state } from "./state";
+import { exampleButton } from "./takes";
 import type { Analysis, DefineRow, KeyInfo, LineRow, PauseRow, SectionRow } from "./types";
 
 const player = () => document.getElementById("player") as HTMLAudioElement;
@@ -157,7 +158,9 @@ function coachingCard(a: Analysis, onRefresh: () => void): HTMLElement {
 function transcriptCard(a: Analysis): HTMLElement {
   const det = h("details", { class: "card" }, h("summary", {}, "Transcript and raw timings"),
     h("p", { class: "transcript" }, ...a.transcript.words.map((w) => h("span", { class: "w", onClick: () => play(w.start), title: `${w.start.toFixed(2)}–${w.end.toFixed(2)} s` }, w.text + " "))),
-    h("p", { class: "muted small" }, `Analysis took ${a.timing.stt_s ?? "?"} s of transcription. Every number in this report comes from these timestamps; the full JSON is at `,
+    h("p", { class: "muted small" }, `${a.timing.stt_s !== undefined ? `Analysis took ${a.timing.stt_s} s of transcription.`
+      : a.kind === "example" ? "No speech-to-text ran for this take: it uses the example's committed transcript."
+      : "Transcription time was not recorded for this take."} Every number in this report comes from these timestamps; the full JSON is at `,
       h("a", { href: `/api/takes/${a.take_id}`, target: "_blank" }, `/api/takes/${a.take_id}`), "."));
   return det;
 }
@@ -166,7 +169,10 @@ export function renderReport(root: HTMLElement): void {
   clear(root);
   const a = state.analysis;
   if (!a) {
-    root.append(h("p", { class: "muted" }, "No take yet. Record one in Rehearse, or open an earlier take from Takes."));
+    const err = h("p", { class: "small warn", role: "status" });
+    root.append(h("div", { class: "empty-state" },
+      h("p", { class: "muted" }, "No take yet. Record one in Rehearse, open an earlier take from Takes, or load the example take to see what a report looks like."),
+      exampleButton(() => renderReport(root), (msg) => { err.textContent = msg; }), err));
     return;
   }
   const p = player();
