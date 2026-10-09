@@ -175,6 +175,10 @@ def reanalyze(take_id: str, script_text: str, settings: Settings, label: str | N
         if settings.emphasis_enabled:
             from take_two.emphasis import emphasis_report
             result["emphasis"] = emphasis_report(script, result, audio, audio_mod.SR)
+        from take_two.focus import focus
+        earlier = [] if result["kind"] != "take" else [
+            a for a in takes.same_script(result["script_key"], before=result["created_at"]) if a.get("take_id") != take_id]
+        result["focus"] = focus(result, earlier)
         takes.save_json(tdir / "analysis.json", result)
         return result
 

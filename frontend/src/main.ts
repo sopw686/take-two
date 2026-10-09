@@ -8,6 +8,7 @@ import { renderRehearse, stopRehearsal } from "./rehearse";
 import { renderReport } from "./report";
 import { openSettings } from "./settings";
 import { state } from "./state";
+import { installTipPinning } from "./status";
 import { renderTakes } from "./takes";
 
 type Tab = "script" | "rehearse" | "improvise" | "report" | "takes";
@@ -30,7 +31,9 @@ function render(): void {
   tabs.querySelectorAll("a").forEach((a) => a.classList.toggle("active", a.dataset.tab === tab));
   if (tab !== "rehearse") stopRehearsal();
   if (tab !== "improvise") stopImprovise();
-  (document.getElementById("player") as HTMLAudioElement).pause();
+  const p = document.getElementById("player") as HTMLAudioElement;
+  p.pause();
+  p.ontimeupdate = null;  // the view that set it is gone
   switch (tab) {
     case "script": renderEditor(main); break;
     case "rehearse": renderRehearse(main, () => go("report")); break;
@@ -90,6 +93,7 @@ async function openStartupTake(): Promise<void> {
   }
 }
 
+installTipPinning();
 window.addEventListener("hashchange", render);
 (document.getElementById("settings-btn") as HTMLButtonElement).addEventListener("click", () => openSettings(async () => {
   if (state.current === "improv" && state.improv) {

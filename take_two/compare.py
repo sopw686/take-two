@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from collections import Counter
 
+# Statuses that count as diverging from a mark, by mark kind ("close" / "near" does not). Shared with focus.py.
+DIVERGED = {"KEY": {"diverged"}, "/": {"short", "missing"}, "//": {"short", "missing"},
+            "section": {"over", "under"}, "DEFINE": {"undefined", "never_spoken"}}
+
 
 def _key_marks(a: dict) -> dict[tuple, dict]:
     out = {}
@@ -55,7 +59,7 @@ def compare_takes(analyses: list[dict]) -> dict:
         else:
             label = f"“{m['term']}”"
         if m["kind"] in ("KEY", "/", "//"):
-            bad = c.get("diverged", 0) + c.get("missing", 0) + c.get("short", 0)
+            bad = sum(n for s, n in c.items() if s in DIVERGED[m["kind"]])
             if bad >= 2:
                 if m["kind"] == "KEY":
                     # "Rushed" only for takes that diverged AND ran faster than the median; other divergences

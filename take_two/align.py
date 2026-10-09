@@ -128,3 +128,43 @@ def align(script: Script, transcript: Transcript) -> Alignment:
                                 matched=len(matched), total=len(lt),
                                 span_words=(matched_idx[-1] - matched_idx[0] + 1) if matched_idx else 0))
     return Alignment(tokens=talign, lines=lines, transcript_norm=trans_norm, matched_transcript=matched_transcript)
+
+
+def adlib_spans(al: Alignment, transcript: Transcript, found: set[int], claimed: frozenset[int] = frozenset()) -> dict[int, list[dict]]:
+    """Transcript words that matched no script word, placed between the script words they were said between.
+
+    Walks the aligned tokens of found lines in script order (which is also time order).
+    Each span gets the line it belongs to and `word_index`, the token it sits before
+    (len(tokens) = end of the line). A span between two lines goes to the line it is
+    closer to in time; one before the first or after the last aligned word goes to that
+    word's line. Words already matched (to any line) or claimed by another use are skipped.
+    """
+    words = transcript.words
+    comparable = {i for _, i in al.transcript_norm}
+    taken = set(al.matched_transcript) | set(claimed)
+    anchors = [t for t in al.tokens if t.aligned and t.token.line in found and t.transcript_indexes]
+    out: dict[int, list[dict]] = {}
+    prev: TokenAlignment | None = None
+    prev_w = -1
+    for cur in anchors + [None]:
+        nxt_w = min(cur.transcript_indexes) if cur is not None else len(words)
+        gap = [w for w in range(prev_w + 1, nxt_w) if w in comparable and w not in taken]
+        if gap and (prev is not None or cur is not None):
+            if prev is None:
+                line, k = cur.token.line, cur.token.index
+            elif cur is None or prev.token.line == cur.token.line:
+                line, k = prev.token.line, prev.token.index + 1
+            else:
+                before = words[gap[0]].start - (prev.end if prev.end is not None else words[gap[0]].start)
+                after = (cur.start if cur.start is not None else words[gap[-1]].end) - words[gap[-1]].end
+                line, k = (prev.token.line, prev.token.index + 1) if before <= after else (cur.token.line, cur.token.index)
+            said = [n for i in gap for n in normalize_word(words[i].text)]
+            near = [t.token.norm for t in (prev, cur) if t is not None]
+            out.setdefault(line, []).append({
+                "word_index": k, "text": " ".join(words[i].text for i in gap),
+                "start": round(words[gap[0]].start, 3), "end": round(words[gap[-1]].end, 3), "words": gap,
+                "repeat": said in near,  # a restart such as "the the model"
+            })
+        if cur is not None:
+            prev, prev_w = cur, max(prev_w, max(cur.transcript_indexes))
+    return out

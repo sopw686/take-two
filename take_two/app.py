@@ -80,9 +80,8 @@ async def sample() -> dict:
     return {"text": config.SAMPLE_SCRIPT.read_text(encoding="utf-8")}
 
 
-@app.post("/api/takes")
-async def create_take(audio: UploadFile = File(...), script: str = Form(...), settings: str | None = Form(None),
-                      label: str = Form("")) -> dict:
+async def _new_script_take(audio: UploadFile, script: str, settings: str | None, label: str) -> tuple[str, Settings]:
+    """Validate a script take and create its folder (upload, script, settings) before any processing."""
     st = _parse_settings(settings)
     # Multipart form fields arrive with CRLF; on Windows write_text would turn that into \r\r\n in script.md.
     script = script.replace("\r\n", "\n")
@@ -91,9 +90,15 @@ async def create_take(audio: UploadFile = File(...), script: str = Form(...), se
     data = await audio.read()
     if not data:
         raise HTTPException(400, "the recording is empty")
-    # The folder (upload, script, settings) exists before any processing, so a failure can be retried.
     take_id = takes.new_take("script", upload=data, original_name=audio.filename or "take.webm",
                              settings=st.model_dump(), label=label, script=script)
+    return take_id, st
+
+
+@app.post("/api/takes")
+async def create_take(audio: UploadFile = File(...), script: str = Form(...), settings: str | None = Form(None),
+                      label: str = Form("")) -> dict:
+    take_id, st = await _new_script_take(audio, script, settings, label)
     return await process(take_id, st)
 
 
@@ -130,6 +135,12 @@ class RetryBody(BaseModel):
 @app.post("/api/takes/{take_id}/retry")
 async def retry_take(take_id: str, body: RetryBody | None = None) -> dict:
     """Run a failed take again from its saved upload, resuming at the first stage whose output is missing."""
+    settings = _prepare_retry(take_id, body)
+    return await process(take_id, settings)
+
+
+def _prepare_retry(take_id: str, body: RetryBody | None) -> Settings | None:
+    """Check a take can be retried and save whatever the retry adds (script, topic, settings, label)."""
     tdir = _take_dir(take_id)
     body = body or RetryBody()
     _check_retryable(take_id)
@@ -156,7 +167,7 @@ async def retry_take(take_id: str, body: RetryBody | None = None) -> dict:
     if body.label is not None:
         updates["label"] = body.label
     takes.update_meta(take_id, **updates)
-    return await process(take_id, body.settings)
+    return body.settings
 
 
 def _check_retryable(take_id: str) -> None:
@@ -292,6 +303,49 @@ def _reject_improv(take_id: str, data: dict | None = None) -> None:
     data = data if data is not None else takes.load_take(take_id)
     if data and data.get("mode") == "improv":
         raise HTTPException(400, "this is an Improvise take; use /api/improv")
+
+
+# ---- background jobs: the same work, with progress -----------------------------
+# The synchronous endpoints above stay for scripts and tests; the page uses these and polls.
+
+def _start_job(take_id: str, settings: Settings | None) -> dict:
+    from take_two import jobs
+    mode = takes.load_meta(take_id).get("mode") or "script"
+    try:
+        return jobs.submit(take_id, mode, lambda progress: pipeline.process_take(take_id, progress, settings))
+    except takes.Busy:
+        raise HTTPException(409, "this take is being analyzed right now")
+
+
+@app.post("/api/jobs/takes")
+async def create_take_job(audio: UploadFile = File(...), script: str = Form(...), settings: str | None = Form(None),
+                          label: str = Form("")) -> dict:
+    take_id, st = await _new_script_take(audio, script, settings, label)
+    return _start_job(take_id, st)
+
+
+@app.post("/api/jobs/improv")
+async def create_improv_job(audio: UploadFile = File(...), topic: str = Form(...), goal_s: float | None = Form(None),
+                            content: bool = Form(False), settings: str | None = Form(None), label: str = Form("")) -> dict:
+    from take_two.improv_routes import new_improv_take
+    take_id, st = await new_improv_take(audio, topic, goal_s, content, settings, label)
+    return _start_job(take_id, st)
+
+
+@app.post("/api/jobs/retry/{take_id}")
+async def retry_job(take_id: str, body: RetryBody | None = None) -> dict:
+    return _start_job(take_id, _prepare_retry(take_id, body))
+
+
+@app.get("/api/jobs/{take_id}")
+async def job_status(take_id: str) -> dict:
+    """{take_id, mode, status: queued | running | done | failed, stage, stages, error, result (the analysis, when done)}."""
+    from take_two import jobs
+    _take_dir(take_id)
+    job = jobs.status(take_id)
+    if job["status"] == "done":
+        job["result"] = takes.load_take(take_id)
+    return job
 
 
 # ---- LLM features ------------------------------------------------------------

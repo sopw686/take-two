@@ -61,11 +61,9 @@ def check_goal(goal_s: float | None) -> float | None:
     return goal_s
 
 
-@router.post("")
-async def create(audio: UploadFile = File(...), topic: str = Form(...), goal_s: float | None = Form(None),
-                 content: bool = Form(False), settings: str | None = Form(None), label: str = Form("")) -> dict:
-    from take_two.app import process
-
+async def new_improv_take(audio: UploadFile, topic: str, goal_s: float | None, content: bool, settings: str | None,
+                          label: str) -> tuple[str, Settings]:
+    """Validate an Improvise take and create its folder (upload, topic, settings) before any processing."""
     st = _settings(settings)
     topic = clean_topic(topic)
     check_goal(goal_s)
@@ -75,6 +73,15 @@ async def create(audio: UploadFile = File(...), topic: str = Form(...), goal_s: 
     take_id = takes.new_take("improv", upload=data, original_name=audio.filename or "take.webm",
                              settings=st.model_dump(), label=label,
                              improv={"topic": topic, "goal_s": goal_s, "content": content})
+    return take_id, st
+
+
+@router.post("")
+async def create(audio: UploadFile = File(...), topic: str = Form(...), goal_s: float | None = Form(None),
+                 content: bool = Form(False), settings: str | None = Form(None), label: str = Form("")) -> dict:
+    from take_two.app import process
+
+    take_id, st = await new_improv_take(audio, topic, goal_s, content, settings, label)
     return await process(take_id, st)
 
 

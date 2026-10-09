@@ -158,18 +158,18 @@ export async function renderImprovise(root: HTMLElement, goToReport: () => void)
     const topic = currentTopic();
     const label = labelInput.value.trim();
     const settings = state.effectiveSettings();
-    const ok = await runAnalysis({
+    await runAnalysis<ImprovAnalysis>({
       host, blob, filename,
       message: state.health?.audio_leaves_machine
         ? "Transcribing with the configured cloud service…"
         : `Transcribing and measuring on this computer (${state.health?.stt.model ?? "local model"})…`,
-      start: () => api.createImprov(blob, filename, topic, prefs.goal_s, content, settings, label),
-      retry: (id) => api.retryTake(id, { settings }) as Promise<ImprovAnalysis>,
+      start: () => api.startImprovJob(blob, filename, topic, prefs.goal_s, content, settings, label),
+      retry: (id) => api.startRetryJob(id, { settings }),
       open: (a) => state.setImprov(a),
       goToReport,
+      onFail,
       onAbandon: () => void renderImprovise(root, goToReport),
     });
-    if (!ok) onFail();
   }
 
   // ---- the session: prep countdown, then recording against the goal ------------------------
@@ -261,7 +261,8 @@ export async function renderImprovise(root: HTMLElement, goToReport: () => void)
       const frac = t / goal;
       panel.classList.toggle("wrap-up", frac >= 0.8 && frac < 1);
       panel.classList.toggle("overtime", frac >= 1);
-      hint.textContent = frac < 0.8 ? "" : frac < 1 ? "Start heading for your closing line." : "Time. Land your last sentence and stop.";
+      const next = frac < 0.8 ? "" : frac < 1 ? "Start heading for your closing line." : "Time. Land your last sentence and stop.";
+      if (hint.textContent !== next) hint.textContent = next;  // a live region: write only on change
       if (frac >= 2) void finish(); // safety stop
     };
     tick();

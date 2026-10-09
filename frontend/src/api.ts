@@ -1,4 +1,4 @@
-import type { Analysis, CompareResult, Health, ImprovAnalysis, Settings, SuggestResponse, TakeSummary, Topic } from "./types";
+import type { Analysis, CompareResult, Health, ImprovAnalysis, JobStatus, Settings, SuggestResponse, TakeSummary, Topic } from "./types";
 
 /** A failed request. takeId is set when the server kept a take folder that can be retried. */
 export class ApiError extends Error {
@@ -26,6 +26,14 @@ async function j<T>(r: Response): Promise<T> {
     throw new ApiError(detail, r.status, takeId);
   }
   return r.json() as Promise<T>;
+}
+
+function takeForm(audio: Blob, filename: string, fields: Record<string, string>, settings: Settings): FormData {
+  const fd = new FormData();
+  fd.append("audio", audio, filename);
+  for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+  fd.append("settings", JSON.stringify(settings));
+  return fd;
 }
 
 const post = (url: string, body?: unknown) =>
@@ -92,5 +100,14 @@ export const api = {
     post(`/api/takes/${takeId}/retry`, body).then((r) => j<Analysis | ImprovAnalysis>(r)),
   deleteTake: (takeId: string) => fetch(`/api/takes/${takeId}`, { method: "DELETE" }).then((r) => j<{ deleted: string }>(r)),
   loadExample: (settings: Settings, name = "coral") => post(`/api/examples/${name}`, { settings }).then((r) => j<Analysis>(r)),
+  /** Background analysis with progress: these return at once with the job; poll job(takeId). */
+  startTakeJob: (audio: Blob, filename: string, script: string, settings: Settings, label = "") =>
+    fetch("/api/jobs/takes", { method: "POST", body: takeForm(audio, filename, { script, label }, settings) }).then((r) => j<JobStatus>(r)),
+  startImprovJob: (audio: Blob, filename: string, topic: string, goalS: number | null, content: boolean, settings: Settings, label = "") =>
+    fetch("/api/jobs/improv", { method: "POST", body: takeForm(audio, filename,
+      { topic, content: String(content), label, ...(goalS !== null ? { goal_s: String(goalS) } : {}) }, settings) }).then((r) => j<JobStatus>(r)),
+  startRetryJob: (takeId: string, body: { script?: string; settings?: Settings } = {}) =>
+    post(`/api/jobs/retry/${takeId}`, body).then((r) => j<JobStatus>(r)),
+  job: (takeId: string) => fetch(`/api/jobs/${takeId}`).then((r) => j<JobStatus>(r)),
   compare: (takeId: string) => fetch(`/api/compare?take_id=${encodeURIComponent(takeId)}`).then((r) => j<CompareResult>(r)),
 };

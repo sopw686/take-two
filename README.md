@@ -48,9 +48,12 @@ The Rehearse tab shows the script as a **teleprompter**: large type (A−/A+, re
 
 ## What the report shows
 
+- A timeline strip over the whole take: silences found by the voice-activity detector, when each line was spoken, and where each mark was measured. Click to hear that moment.
 - A short summary: "2 of 3 key lines met your marks. Methods ran 0:12 over budget. 'Convolution' was never defined."
-- Section bars: budget vs. spoken time.
-- The script itself with every mark colored met / close / diverged; hover for the numbers in plain words; click any line or mark to hear that moment.
+- **Focus for the next take**: at most three marks to work on, written by the app from your numbers (no model, no key): marks that diverged in two or more takes first, then this take's largest divergences.
+- Section bars: budget vs. spoken time, and for a section that ran over, **cut to fit** in words at your own median ("Methods ran 0:22 over: about 55 words at your 150 wpm"), plus the same for the whole talk.
+- The script itself with every mark marked met ✓ / close ~ / diverged ✗ / not measured –; hover, focus or click a mark for the numbers in plain words (a click also plays that moment); click any line to hear it. Optionally, **what you said vs. the script**: dropped words struck through, ad-libs boxed in place, "N words differ" per line.
+- While a take is analyzed, the page shows each stage: decoding, transcribing, aligning, definition check.
 - Takes tab: every take you recorded, and a mark-by-mark comparison across takes of the same script ("you rushed this key line in 3 of 4 takes").
 - **Load example take** (Report and Takes tabs): a synthetic-voice take of a short coral-reef script, analyzed instantly from a committed transcript. It needs no microphone and no speech model, so you can see a full report on any machine. It is labelled as synthetic and left out of comparisons.
 - A failed analysis never loses the recording: the take stays in Takes as "Not analyzed" with Retry (re-runs from the copy on disk) and Delete, and the page offers Download recording.

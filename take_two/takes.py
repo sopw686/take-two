@@ -87,6 +87,17 @@ def take_lock(take_id: str) -> threading.RLock:
         return _take_locks.setdefault(take_id, threading.RLock())
 
 
+def reserve(take_id: str) -> None:
+    """Mark a take as waiting to be processed by this process."""
+    with _lock:
+        QUEUED.add(take_id)
+
+
+def release(take_id: str) -> None:
+    with _lock:
+        QUEUED.discard(take_id)
+
+
 def is_busy(take_id: str) -> bool:
     return take_id in ACTIVE or take_id in QUEUED
 

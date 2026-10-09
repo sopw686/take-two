@@ -1,17 +1,13 @@
 import { api } from "./api";
 import { clear, fmtTime, h } from "./dom";
 import { state } from "./state";
+import { statusChip } from "./status";
 import type { CompareResult, TakeSummary } from "./types";
 
 function statusWord(s: string): string {
   return ({ met: "met", near: "close", diverged: "diverged", short: "short", missing: "missing", unmeasurable: "n/a",
     not_found: "not found", over: "over", under: "under", no_budget: "no budget", defined: "defined", undefined: "undefined",
     never_spoken: "not spoken", not_checked: "n/a" } as Record<string, string>)[s] ?? s;
-}
-function statusClass(s: string): string {
-  if (s === "defined") return "st-met";
-  if (s === "undefined" || s === "never_spoken") return "st-diverged";
-  return `st-${s}`;
 }
 
 function compareCard(cmp: CompareResult): HTMLElement {
@@ -22,7 +18,7 @@ function compareCard(cmp: CompareResult): HTMLElement {
       const st = m.statuses[i];
       const v = m.values[i];
       const val = v === null || v === undefined ? "" : m.kind === "KEY" ? ` ${v > 0 ? "+" : ""}${Math.round(v)}%` : m.kind === "section" ? ` ${v > 0 ? "+" : ""}${Math.round(v)} s` : ` ${v.toFixed(2)} s`;
-      return h("td", {}, st ? h("span", { class: `mark ${statusClass(st)}` }, statusWord(st) + val) : h("span", { class: "muted" }, "–"));
+      return h("td", {}, st ? statusChip(st, statusWord(st) + val, { word: statusWord(st) }) : h("span", { class: "muted" }, "–"));
     });
     return h("tr", {}, h("td", { class: "cmp-name" }, name, h("div", { class: "muted small" }, m.text ?? "")), ...cells);
   });

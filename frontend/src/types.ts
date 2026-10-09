@@ -39,7 +39,14 @@ export interface Health {
 
 export type Status = "met" | "near" | "diverged" | "short" | "missing" | "unmeasurable" | "not_found" | "over" | "under" | "no_budget" | "ok" | "unknown";
 
-export interface WordRow { index: number; text: string; start: number | null; end: number | null }
+export interface WordRow { index: number; text: string; start: number | null; end: number | null; dropped?: boolean }
+
+/** Words said between two script words that match no script word (ad-libs, restarts, fillers). */
+export interface AdlibSpan { word_index: number; text: string; start: number; end: number; words: number[]; repeat: boolean }
+
+export interface CutToFit { over_s: number; words: number | null; wpm: number | null; text: string }
+
+export interface FocusItem { mark: string; kind: string; status: string; text: string; repeat: number; takes: number }
 
 export interface KeyInfo {
   status: Status;
@@ -70,6 +77,8 @@ export interface LineRow {
   status: "ok" | "not_found";
   words: WordRow[];
   key?: KeyInfo;
+  adlibs?: AdlibSpan[];
+  words_differ?: number | null;
 }
 
 export interface SectionRow {
@@ -87,6 +96,7 @@ export interface SectionRow {
   line_start: number;
   line_end: number;
   words: number;
+  cut?: CutToFit | null;
 }
 
 export interface PauseRow {
@@ -127,6 +137,9 @@ export interface Analysis {
   silence_method: string;
   baseline: { median_wpm: number | null; lines_used: number; min_words_per_line: number; median_pause_s: number | null; pauses_counted: number };
   sections: SectionRow[];
+  fit_total?: { status: string; reason?: string; budget_s?: number; spoken_s?: number; delta_s?: number; cut?: CutToFit };
+  focus?: { all_met: boolean; items: FocusItem[]; note: string | null };
+  silences?: { start: number; end: number }[];
   lines: LineRow[];
   pauses: PauseRow[];
   defines: DefineRow[];
@@ -315,3 +328,14 @@ export interface ImprovAnalysis {
 }
 
 export interface Topic { text: string; category: string; level: "easy" | "medium" | "hard" }
+
+/** A background analysis: GET /api/jobs/{take_id}. */
+export interface JobStatus {
+  take_id: string;
+  mode: "script" | "improv";
+  status: "queued" | "running" | "done" | "failed";
+  stage: string | null;
+  stages: string[];
+  error: string | null;
+  result?: Analysis | ImprovAnalysis;
+}

@@ -3,17 +3,11 @@
 
 import { api } from "./api";
 import { clear, fmtClock, fmtTime, h } from "./dom";
+import { play, player } from "./player";
 import { state } from "./state";
+import { statusChip } from "./status";
 import type { ImprovAnalysis, ImprovReport } from "./types";
 
-const player = () => document.getElementById("player") as HTMLAudioElement;
-
-function play(at: number | null | undefined): void {
-  if (at === null || at === undefined) return;
-  const p = player();
-  p.currentTime = Math.max(0, at - 0.15);
-  void p.play();
-}
 
 function word(s: string): string {
   return ({ met: "within your band", near: "close to your band", diverged: "outside your band", unmeasurable: "not measurable",
@@ -21,7 +15,7 @@ function word(s: string): string {
 }
 
 function chip(status: string, text?: string): HTMLElement {
-  return h("span", { class: `mark st-${status}` }, text ?? word(status));
+  return statusChip(status, text ?? word(status), { word: word(status) });
 }
 
 const FOCUS: Record<string, string> = { fillers: "Fillers", confidence: "Confidence", hesitation: "Hesitation", engagement: "Engagement",
@@ -136,16 +130,16 @@ function transcriptCard(a: ImprovAnalysis): HTMLElement {
   for (const x of r.hedges.items) for (let k = x.i; k <= x.j; k++) mark(k, "a-hedge", `Hedge: “${x.phrase}”`);
   for (const x of r.hesitation.restarts) for (let k = x.i; k <= x.j; k++) mark(k, "a-restart", x.kind === "fragment" ? "Cut-off word" : "Repeated word (restart)");
   for (const u of r.clarity.unclear) mark(u.i, "a-unclear", `Hard to catch (recognizer confidence ${(u.prob * 100).toFixed(0)}%)`);
-  for (const u of r.tone.uptalk) after(u.i, h("span", { class: "mark st-near tip", "data-tip": `Statement ended rising ${u.rise_st} semitones. Click to hear the sentence.`,
-    onClick: (e) => { e.stopPropagation(); play(u.sentence_start); } }, "↗"));
-  for (const u of r.tone.trail_off) after(u.i, h("span", { class: "mark st-near tip", "data-tip": `Last word ${u.drop_db} dB quieter than the rest of the sentence. Click to hear the sentence.`,
-    onClick: (e) => { e.stopPropagation(); play(u.sentence_start); } }, "↘"));
-  for (const p of r.hesitation.pauses) after(p.after_i, h("span", { class: "mark pause st-diverged tip",
-    "data-tip": `${p.duration_s.toFixed(1)} s silence ${p.kind ?? ""} between “${p.before}” and “${p.after}”.`,
-    onClick: (e) => { e.stopPropagation(); play(p.start - 1); } }, `⏸ ${p.duration_s.toFixed(1)}s`));
-  for (const p of r.engagement.purposeful_pauses) after(p.after_i, h("span", { class: "mark pause st-met tip",
-    "data-tip": `${p.duration_s.toFixed(1)} s pause between sentences: lets the previous line land.`,
-    onClick: (e) => { e.stopPropagation(); play(p.start - 1); } }, `${p.duration_s.toFixed(1)}s`));
+  for (const u of r.tone.uptalk) after(u.i, statusChip("near", "↗", { word: "rising ending", tip: `Statement ended rising ${u.rise_st} semitones. Click to hear the sentence.`,
+    onClick: (e) => { e.stopPropagation(); play(u.sentence_start); } }));
+  for (const u of r.tone.trail_off) after(u.i, statusChip("near", "↘", { word: "fading ending", tip: `Last word ${u.drop_db} dB quieter than the rest of the sentence. Click to hear the sentence.`,
+    onClick: (e) => { e.stopPropagation(); play(u.sentence_start); } }));
+  for (const p of r.hesitation.pauses) after(p.after_i, statusChip("diverged", `⏸ ${p.duration_s.toFixed(1)}s`, { word: "hesitation", extraClass: "pause",
+    tip: `${p.duration_s.toFixed(1)} s silence ${p.kind ?? ""} between “${p.before}” and “${p.after}”.`,
+    onClick: (e) => { e.stopPropagation(); play(p.start - 1); } }));
+  for (const p of r.engagement.purposeful_pauses) after(p.after_i, statusChip("met", `${p.duration_s.toFixed(1)}s`, { word: "deliberate pause", extraClass: "pause",
+    tip: `${p.duration_s.toFixed(1)} s pause between sentences: lets the previous line land.`,
+    onClick: (e) => { e.stopPropagation(); play(p.start - 1); } }));
 
   const body = h("p", { class: "transcript annotated" }, ...words.flatMap((w, i) => {
     const x = ann[i];
@@ -156,8 +150,8 @@ function transcriptCard(a: ImprovAnalysis): HTMLElement {
   }));
   const legend = h("div", { class: "legend muted small" },
     h("span", { class: "w a-filler" }, "filler"), h("span", { class: "w a-hedge" }, "hedge"), h("span", { class: "w a-restart" }, "restart"),
-    h("span", { class: "w a-unclear" }, "hard to catch"), h("span", { class: "mark st-near" }, "↗ rising"), h("span", { class: "mark st-near" }, "↘ fading"),
-    h("span", { class: "mark pause st-diverged" }, "⏸ hesitation"), h("span", { class: "mark pause st-met" }, "deliberate pause"),
+    h("span", { class: "w a-unclear" }, "hard to catch"), statusChip("near", "↗ rising"), statusChip("near", "↘ fading"),
+    statusChip("diverged", "⏸ hesitation", { extraClass: "pause" }), statusChip("met", "deliberate pause", { extraClass: "pause" }),
     " · click any word to hear it");
   return h("section", { class: "card" }, h("h3", {}, "What you said"), legend, r.words ? body : h("p", { class: "muted" }, "No speech was recognized."));
 }
@@ -165,7 +159,7 @@ function transcriptCard(a: ImprovAnalysis): HTMLElement {
 function drillsCard(r: ImprovReport): HTMLElement {
   return h("section", { class: "card drills" }, h("h3", {}, "What to practise next"),
     r.drills.length
-      ? h("ol", {}, ...r.drills.map((d) => h("li", {}, h("span", { class: `mark st-${d.status}` }, FOCUS[d.focus] ?? d.focus), d.text)))
+      ? h("ol", {}, ...r.drills.map((d) => h("li", {}, statusChip(d.status, FOCUS[d.focus] ?? d.focus, { word: word(d.status) }), d.text)))
       : h("p", {}, "Every measure is within your bands. Try a longer goal or a harder topic."),
     h("p", { class: "muted small" }, "Written by the app from your numbers, no model involved."));
 }
@@ -203,7 +197,7 @@ function coachCard(a: ImprovAnalysis, rerender: () => void, autoContent: boolean
     cr ? h("div", { class: "content-review" },
       h("h3", {}, "Content"),
       cr.items.length ? h("ul", {}, ...cr.items.map((it) => h("li", {},
-        h("span", { class: `mark st-${verdictCls(it.verdict)}` }, `${it.label}: ${it.verdict}`), it.note,
+        statusChip(verdictCls(it.verdict), `${it.label}: ${it.verdict}`, { word: it.verdict }), it.note,
         it.evidence ? h("button", { class: "quote linklike", type: "button", onClick: () => play(it.evidence?.start) }, `“${it.evidence.quote}”`) : null)))
         : h("p", { class: "muted small" }, cr.reason ?? "No review."),
       cr.dropped?.length ? h("p", { class: "muted small" }, `Not shown because the quoted words could not be found in your transcript: ${cr.dropped.join(", ")}.`) : null,

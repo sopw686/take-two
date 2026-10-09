@@ -132,31 +132,29 @@ export function renderRehearse(root: HTMLElement, goToReport: () => void): void 
   }
 
   async function submit(blob: Blob, filename: string): Promise<void> {
-    recBtn.setAttribute("disabled", "");
-    fileInput.disabled = true;
-    recBtn.textContent = "Analyzing…";
+    const busy = (on: boolean) => {
+      recBtn.toggleAttribute("disabled", on);
+      fileInput.disabled = on;
+      recBtn.textContent = on ? "Analyzing…" : "Start recording";
+      if (!on) recBtn.classList.remove("recording");
+    };
+    busy(true);
     status.textContent = "";
     const label = labelInput.value.trim();
     const settings = state.effectiveSettings();
-    const ok = await runAnalysis({
+    await runAnalysis<Analysis>({
       host: runPanel, blob, filename,
       message: state.health?.audio_leaves_machine
         ? "Transcribing with the configured cloud service…"
         : `Transcribing on this computer (${state.health?.stt.model ?? "local model"})…`,
-      start: () => api.createTake(blob, filename, script, settings, label),
-      retry: async (id) => {
-        recBtn.setAttribute("disabled", "");
-        fileInput.disabled = true;
-        try {
-          return await (api.retryTake(id, { settings }) as Promise<Analysis>);
-        } catch (err) {
-          recBtn.removeAttribute("disabled");
-          fileInput.disabled = false;
-          throw err;
-        }
+      start: () => api.startTakeJob(blob, filename, script, settings, label),
+      retry: (id) => {
+        busy(true);
+        return api.startRetryJob(id, { settings });
       },
       open: (a) => state.setAnalysis(a),
       goToReport,
+      onFail: () => busy(false),
       onAbandon: () => {
         if (recorder?.state === "recording") {
           recorder.onstop = null;
@@ -166,12 +164,6 @@ export function renderRehearse(root: HTMLElement, goToReport: () => void): void 
         renderRehearse(root, goToReport);
       },
     });
-    if (!ok) {
-      recBtn.removeAttribute("disabled");
-      fileInput.disabled = false;
-      recBtn.textContent = "Start recording";
-      recBtn.classList.remove("recording");
-    }
   }
 
   recBtn.addEventListener("click", () => {

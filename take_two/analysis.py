@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from statistics import median
 
-from take_two.align import Alignment, TokenAlignment, align
+from take_two.align import Alignment, TokenAlignment, adlib_spans, align
 from take_two.audio import Silence, longest_silence_between
 from take_two.config import Settings
 from take_two.marks import Script, format_budget
@@ -67,6 +67,44 @@ def _nearest_aligned_at_or_after(al: Alignment, line: int, word_index: int, n_li
     return None
 
 
+def _about_words(raw: float) -> int:
+    """A word count stated as an estimate: exact under 10, else to the nearest 5."""
+    return int(round(raw)) if raw < 10 else int(5 * round(raw / 5))
+
+
+def cut_to_fit(subject: str, over_s: float, median_wpm: float | None, budget_s: float | None = None) -> dict:
+    """An overrun converted into words at the speaker's own median rate. Plain arithmetic."""
+    out: dict = {"over_s": _r(over_s, 1), "words": None, "wpm": _r(median_wpm, 1)}
+    ran = f"{subject} ran {format_budget(over_s)} over" + (f" its {format_budget(budget_s)} budget" if budget_s else "")
+    if median_wpm:
+        out["words"] = _about_words(over_s * median_wpm / 60.0)
+        out["text"] = f"{ran}: about {out['words']} words at your {median_wpm:.0f} wpm."
+    else:
+        out["text"] = f"{ran}; there is no median in this take, so no word estimate."
+    return out
+
+
+def total_fit(section_rows: list[dict], spoken_start: float | None, spoken_end: float | None,
+              median_wpm: float | None, settings: Settings) -> dict:
+    """The whole talk against the sum of its budgets: only when every section with lines has a budget and was found."""
+    with_lines = [s for s in section_rows if s["line_end"] > s["line_start"]]
+    missing = [s["name"] for s in with_lines if s["budget_s"] is None]
+    if not with_lines or missing:
+        return {"status": "not_measurable", "reason": f"Section {missing[0]} has no budget." if missing else "No sections."}
+    lost = [s["name"] for s in with_lines if s["status"] == "not_found"]
+    if lost or spoken_start is None or spoken_end is None:
+        return {"status": "not_measurable", "reason": f"Section {lost[0]} was not found in this take." if lost else "Nothing was found."}
+    budget = sum(s["budget_s"] for s in with_lines)
+    spoken = spoken_end - spoken_start
+    delta = spoken - budget
+    tol = max(budget * settings.section_tolerance_pct / 100.0, 3.0)
+    out = {"budget_s": budget, "spoken_s": _r(spoken, 2), "delta_s": _r(delta, 2), "tolerance_s": _r(tol, 1),
+           "status": "met" if abs(delta) <= tol else ("over" if delta > 0 else "under")}
+    if out["status"] == "over":
+        out["cut"] = cut_to_fit("The whole talk", delta, median_wpm, budget)
+    return out
+
+
 def analyze(script: Script, transcript: Transcript, silences: list[Silence], settings: Settings,
             audio_duration: float) -> dict:
     al = align(script, transcript)
@@ -89,6 +127,17 @@ def analyze(script: Script, transcript: Transcript, silences: list[Silence], set
         })
 
     ok_lines = {r["index"] for r in line_rows if r["status"] == "ok"}
+
+    # ---- what was said vs. the script ----------------------------------------
+    spans = adlib_spans(al, transcript, ok_lines)
+    for ln, row in zip(script.lines, line_rows):
+        if row["status"] != "ok":
+            row["adlibs"], row["words_differ"] = [], None
+            continue
+        for w, t in zip(row["words"], ln.tokens):
+            w["dropped"] = w["start"] is None and bool(t.norm)
+        row["adlibs"] = spans.get(ln.index, [])
+        row["words_differ"] = sum(1 for w in row["words"] if w["dropped"]) + sum(len(a["words"]) for a in row["adlibs"])
 
     # ---- baseline ---------------------------------------------------------
     base_wpms = [r["wpm"] for r, ln in zip(line_rows, script.lines)
@@ -122,14 +171,19 @@ def analyze(script: Script, transcript: Transcript, silences: list[Silence], set
                 delta = dur - sec.budget_s
                 tol = max(sec.budget_s * settings.section_tolerance_pct / 100.0, 3.0)
                 status = "met" if abs(delta) <= tol else ("over" if delta > 0 else "under")
+        cut = None
+        if status == "over" and delta is not None:
+            cut = cut_to_fit(sec.name or "Untitled", delta, median_wpm)
         section_rows.append({
-            "index": sec.index, "name": sec.name or "Untitled", "budget_s": sec.budget_s,
+            "index": sec.index, "name": sec.name or "Untitled", "budget_s": sec.budget_s, "cut": cut,
             "budget_label": format_budget(sec.budget_s), "start": _r(start, 3), "end": _r(end, 3),
             "duration_s": _r(dur, 2), "duration_label": format_budget(dur) if dur is not None else "",
             "delta_s": _r(delta, 2), "delta_label": _fmt_delta(delta) if delta is not None else "",
             "status": status, "line_start": sec.line_start, "line_end": sec.line_end,
             "words": sum(script.lines[i].word_count for i in range(sec.line_start, sec.line_end)),
         })
+
+    fit_total = total_fit(section_rows, spoken_start, spoken_end, median_wpm, settings)
 
     # ---- [KEY] lines -------------------------------------------------------
     for ln, row in zip(script.lines, line_rows):
@@ -246,6 +300,7 @@ def analyze(script: Script, transcript: Transcript, silences: list[Silence], set
         "duration_s": _r(audio_duration, 2),
         "baseline": baseline,
         "sections": section_rows,
+        "fit_total": fit_total,
         "lines": line_rows,
         "pauses": pause_rows,
         "defines": [],

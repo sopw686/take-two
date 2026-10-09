@@ -383,3 +383,77 @@ def test_example_define_check_is_cached_across_reanalysis(env):
     finally:
         set_llm(None)
     assert Counting.calls == 1
+
+
+# ---- background jobs ------------------------------------------------------------------------
+
+def _wait_job(c, tid, timeout=20.0):
+    import time
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        job = c.get(f"/api/jobs/{tid}").json()
+        if job["status"] in ("done", "failed"):
+            return job
+        time.sleep(0.05)
+    raise AssertionError("job did not finish")
+
+
+def test_job_reports_stages_in_order_and_its_result(env, monkeypatch):
+    c, _, _ = env
+    seen = []
+    real = pipeline.process_take
+
+    def spy(take_id, progress=None, settings=None):
+        return real(take_id, lambda s: (seen.append(s), progress(s)), settings)
+    monkeypatch.setattr(pipeline, "process_take", spy)
+    script = SCRIPT + "[DEFINE: trees] Trees are great.\n"
+    r = c.post("/api/jobs/takes", files={"audio": ("take.wav", _wav(), "audio/wav")}, data={"script": script, "label": "j"})
+    assert r.status_code == 200, r.text
+    tid = r.json()["take_id"]
+    assert r.json()["stages"] == list(pipeline.STAGES["script"])
+    job = _wait_job(c, tid)
+    assert job["status"] == "done" and seen == ["decoding", "transcribing", "aligning", "definition check"]
+    assert job["result"] == c.get(f"/api/takes/{tid}").json() and job["result"]["label"] == "j"
+
+
+def test_failed_job_reports_error_and_take_id_and_retry_job_resumes(env):
+    c, holder, _ = env
+    holder["t"] = Boom()
+    tid = c.post("/api/jobs/takes", files={"audio": ("take.wav", _wav(), "audio/wav")}, data={"script": SCRIPT}).json()["take_id"]
+    job = _wait_job(c, tid)
+    assert job["status"] == "failed" and "exploded" in job["error"] and job["take_id"] == tid
+    holder["t"] = Stub()
+    assert c.post(f"/api/jobs/retry/{tid}").status_code == 200
+    assert _wait_job(c, tid)["status"] == "done" and Stub.calls == 1
+
+
+def test_improv_job_and_busy_take(env):
+    c, _, _ = env
+    r = c.post("/api/jobs/improv", files={"audio": ("take.wav", _wav(), "audio/wav")}, data={"topic": "trees"})
+    tid = r.json()["take_id"]
+    assert r.json()["stages"] == list(pipeline.STAGES["improv"])
+    assert _wait_job(c, tid)["result"]["mode"] == "improv"
+    failed = _fail_one(c, env[1])
+    takes.ACTIVE.add(failed)
+    try:
+        assert c.post(f"/api/jobs/retry/{failed}").status_code == 409
+    finally:
+        takes.ACTIVE.discard(failed)
+
+
+def test_job_status_survives_a_restart_by_reading_the_folder(env):
+    c, holder, _ = env
+    tid = _fail_one(c, holder)  # synchronous route: no job record in memory
+    job = c.get(f"/api/jobs/{tid}").json()
+    assert job["status"] == "failed" and "exploded" in job["error"]
+    done = _post_take(c).json()["take_id"]
+    assert c.get(f"/api/jobs/{done}").json()["status"] == "done"
+
+
+def test_reanalysis_adds_focus_with_history_of_real_takes_only(env):
+    c, _, _ = env
+    first = _post_take(c, settings='{"short_pause_s": 0.2}').json()
+    second = _post_take(c).json()
+    assert "focus" in first and "focus" in second
+    ex = c.post("/api/examples/coral").json()
+    assert ex["focus"]["items"] and all(i["takes"] == 1 for i in ex["focus"]["items"])
