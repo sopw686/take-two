@@ -14,8 +14,7 @@ Requires [uv](https://docs.astral.sh/uv/) and Node 18+ (one-time frontend build)
 
 ```powershell
 # Windows
-.
-un.ps1
+.\run.ps1
 ```
 
 ```bash
