@@ -15,13 +15,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from marked import audio as audio_mod
-from marked import config, takes
-from marked.analysis import analyze
-from marked.config import Settings
-from marked.marks import parse_script
-from marked.stt import get_transcriber
-from marked.stt.base import Transcript
+from take_two import audio as audio_mod
+from take_two import config, takes
+from take_two.analysis import analyze
+from take_two.config import Settings
+from take_two.marks import parse_script
+from take_two.stt import get_transcriber
+from take_two.stt.base import Transcript
 
 log = logging.getLogger(__name__)
 
@@ -163,17 +163,17 @@ def reanalyze(take_id: str, script_text: str, settings: Settings, label: str | N
             "script_key": takes.script_key(script_text),
             "timing": timing or prev.get("timing") or takes.load_meta(take_id).get("timing") or {},
         })
-        from marked.define import check_defines, define_summary
-        from marked.llm import get_llm
+        from take_two.define import check_defines, define_summary
+        from take_two.llm import get_llm
         if progress and script.defines:
             progress("definition check")
         result["defines"] = check_defines(script, transcript, get_llm(), cache_dir=tdir)
         result["summary"].extend(define_summary(result["defines"]))
         if settings.conventions_enabled:
-            from marked.conventions import conventions_report
+            from take_two.conventions import conventions_report
             result["conventions"] = conventions_report(transcript, result, settings)
         if settings.emphasis_enabled:
-            from marked.emphasis import emphasis_report
+            from take_two.emphasis import emphasis_report
             result["emphasis"] = emphasis_report(script, result, audio, audio_mod.SR)
         takes.save_json(tdir / "analysis.json", result)
         return result
@@ -222,7 +222,7 @@ def run_improv(src_audio: Path, topic: str, goal_s: float | None, content: bool,
 
 
 def reanalyze_improv(take_id: str, settings: Settings, label: str | None = None, timing: dict | None = None) -> dict:
-    from marked.improv import analyze_improv
+    from take_two.improv import analyze_improv
 
     with takes.take_lock(take_id):
         tdir = takes.take_path(take_id)

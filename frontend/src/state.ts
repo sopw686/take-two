@@ -1,6 +1,6 @@
 import type { Analysis, Health, ImprovAnalysis, Settings } from "./types";
 
-const KEYS = { script: "marked.script", settings: "marked.settings", calib: "marked.calibration", take: "marked.lastTake" };
+const KEYS = { script: "taketwo.script", settings: "taketwo.settings", calib: "taketwo.calibration", take: "taketwo.lastTake" };
 
 function read<T>(key: string): T | null {
   try {

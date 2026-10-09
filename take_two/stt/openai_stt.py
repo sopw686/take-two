@@ -1,6 +1,6 @@
 """Optional cloud adapter: OpenAI Whisper API with word-level timestamps.
 
-Only used when MARKED_STT=openai and OPENAI_API_KEY is set. The UI says so.
+Only used when TAKE_TWO_STT=openai and OPENAI_API_KEY is set. The UI says so.
 Not exercised in automated tests (no key in CI); see TESTING.md.
 """
 
@@ -11,8 +11,8 @@ import io
 import numpy as np
 import soundfile as sf
 
-from marked import config
-from marked.stt.base import Transcript, Word
+from take_two import config
+from take_two.stt.base import Transcript, Word
 
 
 class OpenAITranscriber:

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from marked.stt.base import Transcript, Word
+from take_two.stt.base import Transcript, Word
 
 log = logging.getLogger(__name__)
 _CUDA_DLLS_ADDED = False

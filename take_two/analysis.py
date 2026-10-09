@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from statistics import median
 
-from marked.align import Alignment, TokenAlignment, align
-from marked.audio import Silence, longest_silence_between
-from marked.config import Settings
-from marked.marks import Script, format_budget
-from marked.stt.base import Transcript
+from take_two.align import Alignment, TokenAlignment, align
+from take_two.audio import Silence, longest_silence_between
+from take_two.config import Settings
+from take_two.marks import Script, format_budget
+from take_two.stt.base import Transcript
 
 
 def _r(x: float | None, nd: int = 2) -> float | None:

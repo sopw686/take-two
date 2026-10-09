@@ -2,29 +2,29 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "marked",
+      "name": "take-two",
       "runtimeExecutable": "uv",
       "runtimeArgs": [
         "run",
         "uvicorn",
-        "marked.app:app",
+        "take_two.app:app",
         "--host",
         "127.0.0.1",
         "--port",
         "8765",
         "--reload",
         "--reload-dir",
-        "marked"
+        "take_two"
       ],
       "port": 8765
     },
     {
-      "name": "marked-dev",
+      "name": "take-two-dev",
       "runtimeExecutable": "powershell",
       "runtimeArgs": [
         "-NoProfile",
         "-Command",
-        "$env:MARKED_TAKES_DIR='.devtakes'; uv run uvicorn marked.app:app --host 127.0.0.1 --port 8766 --reload --reload-dir marked"
+        "$env:TAKE_TWO_TAKES_DIR='.devtakes'; uv run uvicorn take_two.app:app --host 127.0.0.1 --port 8766 --reload --reload-dir take_two"
       ],
       "port": 8766
     }

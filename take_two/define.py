@@ -22,8 +22,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError
 
-from marked.marks import Script, normalize_word
-from marked.stt.base import Transcript
+from take_two.marks import Script, normalize_word
+from take_two.stt.base import Transcript
 
 log = logging.getLogger(__name__)
 
@@ -175,7 +175,7 @@ def _ask_llm(terms: list[str], transcript: Transcript, llm, cache_dir: Path | No
             "\n\nReturn one judgement per term, in the same order.")
     out = llm.complete_structured(SYSTEM, user, DefineJudgements, max_tokens=16000)
     if out is not None and cache_dir is not None:  # a failed call is not cached, so the next re-analysis tries again
-        from marked.takes import save_json
+        from take_two.takes import save_json
         save_json(cache_dir / CACHE_FILE, {"key": key, "judgements": out.model_dump()})
     return out
 

@@ -8,7 +8,7 @@ import { Recorder, showLevel } from "./recorder";
 import { state } from "./state";
 import type { ImprovAnalysis, Topic } from "./types";
 
-const PREFS_KEY = "marked.improv";
+const PREFS_KEY = "taketwo.improv";
 const GOALS = [30, 60, 120, 180, 300];
 const PREP = [0, 15, 30];
 

@@ -1,7 +1,7 @@
-"""Development-only stand-in for the LLM, enabled with MARKED_LLM=fake.
+"""Development-only stand-in for the LLM, enabled with TAKE_TWO_LLM=fake.
 
 It exists so the suggestion review UI can be exercised without a key. It is
-not a fallback: without MARKED_LLM=fake and without a key, suggestions stay
+not a fallback: without TAKE_TWO_LLM=fake and without a key, suggestions stay
 disabled, as the product requires. Its proposals are crude on purpose and the
 UI labels the provider as "fake".
 """

@@ -3,11 +3,11 @@
 import numpy as np
 import pytest
 
-from marked.config import Settings
-from marked.improv import analyze_improv, find_hedges, split_sentences
-from marked.improv_coach import (ContentItem, ContentReview, ImprovCoachOutput, ImprovSuggestion, coach_improv,
+from take_two.config import Settings
+from take_two.improv import analyze_improv, find_hedges, split_sentences
+from take_two.improv_coach import (ContentItem, ContentReview, ImprovCoachOutput, ImprovSuggestion, coach_improv,
                                  validate_content, validate_delivery)
-from marked.stt.base import Word
+from take_two.stt.base import Word
 from tests.helpers import make_transcript, silences_from_gaps
 
 SR = 16000
@@ -245,8 +245,8 @@ def test_coach_improv_sends_numbers_not_audio_and_respects_content_choice():
 def client(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from marked import app as app_mod, config, pipeline
-    from marked.stt.base import Transcript
+    from take_two import app as app_mod, config, pipeline
+    from take_two.stt.base import Transcript
 
     monkeypatch.setattr(config, "TAKES_DIR", tmp_path)
 

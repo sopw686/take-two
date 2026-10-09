@@ -1,8 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from marked import config
-from marked.app import app
+from take_two import config
+from take_two.app import app
 
 
 @pytest.fixture

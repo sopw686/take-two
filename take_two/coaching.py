@@ -11,7 +11,7 @@ import re
 
 from pydantic import BaseModel, Field
 
-from marked.marks import format_budget
+from take_two.marks import format_budget
 
 
 class CoachSuggestion(BaseModel):

@@ -27,7 +27,7 @@ function downloadName(filename: string): string {
   const ext = filename.includes(".") ? filename.slice(filename.lastIndexOf(".")) : ".webm";
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, "0");
-  return `marked-take-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}${ext}`;
+  return `take-two-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}${ext}`;
 }
 
 /** Resolves true when the analysis succeeded, false when it failed (the failure actions stay on screen). */

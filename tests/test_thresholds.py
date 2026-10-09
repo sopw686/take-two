@@ -1,8 +1,8 @@
 """Threshold logic on hand-built transcripts (no audio, no STT)."""
 
-from marked.analysis import analyze
-from marked.config import Settings
-from marked.marks import parse_script
+from take_two.analysis import analyze
+from take_two.config import Settings
+from take_two.marks import parse_script
 from tests.helpers import make_transcript, silences_from_gaps
 
 SCRIPT = """## Intro [0:20]

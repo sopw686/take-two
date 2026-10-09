@@ -1,5 +1,5 @@
-from marked.define import DefineJudgement, DefineJudgements, check_defines, define_summary, heuristic_check, _Flat
-from marked.marks import parse_script
+from take_two.define import DefineJudgement, DefineJudgements, check_defines, define_summary, heuristic_check, _Flat
+from take_two.marks import parse_script
 from tests.helpers import make_transcript
 
 
@@ -141,7 +141,7 @@ def test_llm_result_is_cached_per_terms_text_and_model(tmp_path):
 
 
 def test_cache_key_changes_with_the_prompt(tmp_path, monkeypatch):
-    import marked.define as d
+    import take_two.define as d
     script = parse_script("[DEFINE: entropy] text")
     tr = make_transcript("entropy that is a measure of disorder went up")
     llm = FakeLLM(_defined())
@@ -152,8 +152,8 @@ def test_cache_key_changes_with_the_prompt(tmp_path, monkeypatch):
 
 
 def test_failed_or_absent_model_writes_no_cache(tmp_path):
-    from marked.define import CACHE_FILE
-    from marked.llm.base import NullLLM
+    from take_two.define import CACHE_FILE
+    from take_two.llm.base import NullLLM
     script = parse_script("[DEFINE: entropy] text")
     tr = make_transcript("entropy which is disorder")
     check_defines(script, tr, FakeLLM(None), cache_dir=tmp_path)
@@ -163,7 +163,7 @@ def test_failed_or_absent_model_writes_no_cache(tmp_path):
 
 def test_cached_judgements_are_validated_again(tmp_path):
     import json
-    from marked.define import CACHE_FILE
+    from take_two.define import CACHE_FILE
     script = parse_script("[DEFINE: entropy] text")
     tr = make_transcript("entropy that is a measure of disorder went up")
     llm = FakeLLM(_defined())

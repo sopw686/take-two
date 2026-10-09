@@ -1,4 +1,4 @@
-# Pitch outline: Marked
+# Pitch outline: Take Two
 
 > TODO (Sophie): opening line. One sentence about the moment at a slam when a marked-up page became a performance.
 
@@ -12,7 +12,7 @@ And the failures that actually sink science talks are specific: rushing the one 
 
 ## How marking solves it
 
-Performers mark their scripts. Slam poets, actors, singers: *slow here*, *breathe here*, *hit this word*. Marked brings that to talks with six marks a user can learn in a minute: a section with a time budget, a `[KEY]` line, a short or long pause, a term that must be defined aloud, and an experimental emphasis mark.
+Performers mark their scripts. Slam poets, actors, singers: *slow here*, *breathe here*, *hit this word*. Take Two brings that to talks with six marks a user can learn in a minute: a section with a time budget, a `[KEY]` line, a short or long pause, a term that must be defined aloud, and an experimental emphasis mark.
 
 You mark the script with your intent. You rehearse out loud. The report shows the script itself, with every mark colored met, close, or diverged *from your own mark*, with the measured number behind each one and the audio a click away. "18 % slower than your median: met." "0.2 s of silence against your 0.7 s mark." "'Convolution' was first spoken at 1:05 and not defined before that." There is no score.
 
@@ -22,7 +22,7 @@ For people who don't yet know how to mark, there is a draft: pick a goal (clear,
 
 ## Why voice is essential
 
-The slides are not the talk. The spoken delivery is the talk. And nobody can accurately hear their own pace and pauses while speaking; the attention needed to speak is the attention needed to listen. Marked supplies the listener you cannot be for yourself: a measurement of what you actually did, laid over what you intended.
+The slides are not the talk. The spoken delivery is the talk. And nobody can accurately hear their own pace and pauses while speaking; the attention needed to speak is the attention needed to listen. Take Two supplies the listener you cannot be for yourself: a measurement of what you actually did, laid over what you intended.
 
 Everything is measured, not judged. Word timestamps from local speech recognition, pauses from a voice-activity detector on the raw audio, rates relative to the speaker's own median in the same take. Where a language model is used at all, it reads text and measured numbers; it never hears the audio and never judges how a take "sounded".
 

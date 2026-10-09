@@ -12,7 +12,7 @@ import logging
 
 import numpy as np
 
-from marked.audio import rms_db
+from take_two.audio import rms_db
 
 log = logging.getLogger(__name__)
 

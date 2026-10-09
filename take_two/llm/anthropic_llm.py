@@ -7,7 +7,7 @@ from typing import TypeVar
 
 from pydantic import BaseModel
 
-from marked import config
+from take_two import config
 
 log = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)

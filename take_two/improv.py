@@ -25,12 +25,12 @@ from statistics import median, pstdev
 
 import numpy as np
 
-from marked import prosody
-from marked.audio import Silence
-from marked.config import Settings
-from marked.conventions import find_fillers
-from marked.marks import format_budget, normalize_word
-from marked.stt.base import Word
+from take_two import prosody
+from take_two.audio import Silence
+from take_two.config import Settings
+from take_two.conventions import find_fillers
+from take_two.marks import format_budget, normalize_word
+from take_two.stt.base import Word
 
 TERMINAL_RE = re.compile(r"[.?!…]+[\"'”’)\]]*$")
 QUESTION_RE = re.compile(r"\?[\"'”’)\]]*$")

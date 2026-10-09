@@ -10,13 +10,13 @@ import pytest
 import soundfile as sf
 from fastapi.testclient import TestClient
 
-from marked import app as app_mod
-from marked import config, pipeline, takes
-from marked.audio import SR
-from marked.config import Settings
-from marked.llm import set_llm
-from marked.llm.base import NullLLM
-from marked.stt.base import Transcript, Word
+from take_two import app as app_mod
+from take_two import config, pipeline, takes
+from take_two.audio import SR
+from take_two.config import Settings
+from take_two.llm import set_llm
+from take_two.llm.base import NullLLM
+from take_two.stt.base import Transcript, Word
 
 SCRIPT = "## Intro [0:10]\nTrees are great and they cool the street.\n"
 
@@ -255,8 +255,8 @@ def test_reanalysis_refuses_unfinished_and_busy_takes(env, monkeypatch):
 
 
 def test_coaching_is_saved_unless_a_reanalysis_changed_the_numbers(env, monkeypatch):
-    import marked.coaching as coaching
-    from marked.llm.fake_llm import FakeLLM
+    import take_two.coaching as coaching
+    from take_two.llm.fake_llm import FakeLLM
     c, _, _ = env
     tid = _post_take(c).json()["take_id"]
     set_llm(FakeLLM())
@@ -277,7 +277,7 @@ def test_coaching_is_saved_unless_a_reanalysis_changed_the_numbers(env, monkeypa
 
 
 def test_improv_coach_saves_content_choice_and_drops_stale_results(env, monkeypatch):
-    import marked.improv_coach as ic
+    import take_two.improv_coach as ic
     c, _, tmp = env
     tid = c.post("/api/improv", files={"audio": ("take.wav", _wav(), "audio/wav")}, data={"topic": "trees"}).json()["take_id"]
     monkeypatch.setattr(ic, "coach_improv", lambda *a, **k: {"coaching": {"available": False, "suggestions": []},
@@ -363,8 +363,8 @@ def test_example_is_left_out_of_comparisons_and_the_median(env):
 
 
 def test_example_define_check_is_cached_across_reanalysis(env):
-    from marked.define import DefineJudgement, DefineJudgements
-    from marked.llm import set_llm
+    from take_two.define import DefineJudgement, DefineJudgements
+    from take_two.llm import set_llm
 
     class Counting:
         name, model, available = "counting", "m", True

@@ -2,13 +2,13 @@
 
 import numpy as np
 
-from marked.analysis import analyze
-from marked.coaching import CoachOutput, CoachSuggestion, all_marks_met, coach, validate
-from marked.compare import compare_takes
-from marked.config import Settings
-from marked.conventions import conventions_report
-from marked.emphasis import emphasis_report
-from marked.marks import parse_script
+from take_two.analysis import analyze
+from take_two.coaching import CoachOutput, CoachSuggestion, all_marks_met, coach, validate
+from take_two.compare import compare_takes
+from take_two.config import Settings
+from take_two.conventions import conventions_report
+from take_two.emphasis import emphasis_report
+from take_two.marks import parse_script
 from tests.helpers import make_transcript, silences_from_gaps
 
 

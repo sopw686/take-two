@@ -1,4 +1,4 @@
-from marked.marks import format_budget, normalize_word, parse_script, strip_marks
+from take_two.marks import format_budget, normalize_word, parse_script, strip_marks
 
 SCRIPT = """<!-- comment line -->
 ## Intro [1:30]

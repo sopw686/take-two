@@ -17,9 +17,9 @@ from typing import Literal
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from marked import takes
-from marked.llm import get_llm
-from marked.marks import (DEFINE_RE, KEY_RE, PAUSE_RE, Script, format_budget, is_section_header,
+from take_two import takes
+from take_two.llm import get_llm
+from take_two.marks import (DEFINE_RE, KEY_RE, PAUSE_RE, Script, format_budget, is_section_header,
                           normalize_word, parse_script)
 
 router = APIRouter(prefix="/api/suggest")
@@ -331,7 +331,7 @@ def _rate() -> tuple[float, str]:
 
 @router.get("")
 async def suggest_status() -> dict:
-    from marked.llm import llm_status
+    from take_two.llm import llm_status
     st = llm_status()
     return {"available": st["available"], "reason": st["reason"], "goals": GOAL_LABELS}
 
@@ -342,7 +342,7 @@ async def suggest(body: SuggestBody) -> dict:
     script = parse_script(body.script)
     lines = [{"index": ln.index, "raw_line_no": ln.raw_line_no, "text": ln.text} for ln in script.lines]
     if not llm.available:
-        from marked.llm import llm_status
+        from take_two.llm import llm_status
         return {"available": False, "reason": llm_status()["reason"], "suggestions": [], "dropped": [],
                 "rate_wpm": 0, "rate_source": "", "lines": lines}
     if not script.lines:

@@ -15,14 +15,14 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from marked import config, pipeline, takes
-from marked.config import Settings
-from marked.stt import audio_leaves_machine, get_transcriber
+from take_two import config, pipeline, takes
+from take_two.config import Settings
+from take_two.stt import audio_leaves_machine, get_transcriber
 
-log = logging.getLogger("marked")
+log = logging.getLogger("take_two")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
-app = FastAPI(title="Marked", docs_url="/api/docs", redoc_url=None)
+app = FastAPI(title="Take Two", docs_url="/api/docs", redoc_url=None)
 
 # The server is local-only. Reject foreign Host headers (DNS rebinding) and cross-site writes:
 # a multipart POST needs no CORS preflight, so any web page could otherwise create takes or spend LLM credits.
@@ -66,7 +66,7 @@ async def _warm() -> None:
 
 @app.get("/api/health")
 async def health() -> dict:
-    from marked.llm import llm_status
+    from take_two.llm import llm_status
     return {
         "stt": get_transcriber().describe(),
         "audio_leaves_machine": audio_leaves_machine(),
@@ -146,7 +146,7 @@ async def retry_take(take_id: str, body: RetryBody | None = None) -> dict:
             raise HTTPException(400, "this take has no saved script; send the script to retry with")
     elif mode == "improv":
         if not (tdir / "improv.json").exists():
-            from marked.improv_routes import check_goal, clean_topic
+            from take_two.improv_routes import check_goal, clean_topic
             takes.save_json(tdir / "improv.json", {"topic": clean_topic(body.topic or ""), "goal_s": check_goal(body.goal_s),
                                                    "content": body.content})
     else:
@@ -251,8 +251,8 @@ async def take_audio(take_id: str) -> FileResponse:
 
 @app.post("/api/takes/{take_id}/coach")
 async def coach_take(take_id: str) -> dict:
-    from marked.coaching import coach
-    from marked.llm import get_llm
+    from take_two.coaching import coach
+    from take_two.llm import get_llm
     try:
         data = takes.load_take(take_id)
     except ValueError:
@@ -274,7 +274,7 @@ async def coach_take(take_id: str) -> dict:
 
 @app.get("/api/compare")
 async def compare(take_id: str) -> dict:
-    from marked.compare import compare_takes
+    from take_two.compare import compare_takes
     try:
         _reject_improv(take_id)
         group = takes.takes_with_same_script(take_id)
@@ -295,12 +295,12 @@ def _reject_improv(take_id: str, data: dict | None = None) -> None:
 
 
 # ---- LLM features ------------------------------------------------------------
-from marked.suggest import router as suggest_router  # noqa: E402
+from take_two.suggest import router as suggest_router  # noqa: E402
 
 app.include_router(suggest_router)
 
 # ---- Improvise -----------------------------------------------------------------
-from marked.improv_routes import router as improv_router  # noqa: E402
+from take_two.improv_routes import router as improv_router  # noqa: E402
 
 app.include_router(improv_router)
 
@@ -311,7 +311,7 @@ if config.FRONTEND_DIST.exists():
 else:
     @app.get("/", response_class=HTMLResponse)
     async def _no_frontend() -> str:
-        return ("<h1>Marked API is running</h1><p>The frontend has not been built. Run "
+        return ("<h1>Take Two API is running</h1><p>The frontend has not been built. Run "
                 "<code>./run.ps1</code> (or <code>./run.sh</code>), which builds it, "
                 "or <code>cd frontend && npm run build</code>.</p><p>API docs: <a href='/api/docs'>/api/docs</a></p>")
 

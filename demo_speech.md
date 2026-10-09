@@ -1,4 +1,4 @@
-<!-- Demo speech: a talk about Marked, marked up in Marked's own syntax.
+<!-- Demo speech: a talk about Take Two, marked up in Take Two's own syntax.
      Load it on the Script tab, rehearse it on the Rehearse tab, and the report grades this very speech.
      Run-of-show and the planted divergences are in DEMO.md. Budgets are a first guess: adjust after one take. -->
 ## The problem [0:30]
@@ -8,8 +8,8 @@ But good speakers vary on purpose. They slow down for the result that matters, /
 
 ## The idea [0:30]
 Performers already solved this. Slam poets and actors mark the page: / slow here, breathe here, explain this word.
-Marked does the same for talks. I write my intent into the script as marks, then I rehearse out loud.
-The speech you are hearing right now is marked up, / and Marked is listening to it.
+Take Two does the same for talks. I write my intent into the script as marks, then I rehearse out loud.
+The speech you are hearing right now is marked up, / and Take Two is listening to it.
 
 ## How it works [0:35]
 Speech recognition runs on this laptop and gives every word a timestamp.
@@ -21,5 +21,5 @@ A language model can suggest marks, but it reads only text and numbers. // It ne
 [KEY] The slides are not the talk; the sound is the talk. //
 While I speak, I cannot hear my own pace; / the attention it takes to speak is the attention it takes to listen.
 A transcript erases exactly what matters here: the timing, the pauses, the weight on a word.
-[KEY] Marked is the listener I cannot be for myself, measured against the marks I chose. //
+[KEY] Take Two is the listener I cannot be for myself, measured against the marks I chose. //
 Thank you.

@@ -1,5 +1,5 @@
-from marked.align import align
-from marked.marks import parse_script
+from take_two.align import align
+from take_two.marks import parse_script
 from tests.helpers import make_transcript
 
 SCRIPT = """## A [0:30]

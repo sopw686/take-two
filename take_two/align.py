@@ -11,8 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 
-from marked.marks import Script, Token, normalize_word
-from marked.stt.base import Transcript
+from take_two.marks import Script, Token, normalize_word
+from take_two.stt.base import Transcript
 
 
 @dataclass

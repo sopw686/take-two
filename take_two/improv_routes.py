@@ -9,8 +9,8 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ValidationError
 
-from marked import pipeline, takes
-from marked.config import Settings
+from take_two import pipeline, takes
+from take_two.config import Settings
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/improv")
@@ -42,7 +42,7 @@ def _improv_take(take_id: str) -> dict:
 
 @router.get("/topics")
 async def topics() -> dict:
-    from marked.topics import CATEGORIES, TOPICS
+    from take_two.topics import CATEGORIES, TOPICS
     return {"categories": CATEGORIES, "topics": TOPICS}
 
 
@@ -64,7 +64,7 @@ def check_goal(goal_s: float | None) -> float | None:
 @router.post("")
 async def create(audio: UploadFile = File(...), topic: str = Form(...), goal_s: float | None = Form(None),
                  content: bool = Form(False), settings: str | None = Form(None), label: str = Form("")) -> dict:
-    from marked.app import process
+    from take_two.app import process
 
     st = _settings(settings)
     topic = clean_topic(topic)
@@ -97,9 +97,9 @@ class CoachBody(BaseModel):
 
 @router.post("/{take_id}/coach")
 async def coach(take_id: str, body: CoachBody | None = None) -> dict:
-    from marked.improv_coach import coach_improv
-    from marked.llm import get_llm
-    from marked.stt.base import Transcript
+    from take_two.improv_coach import coach_improv
+    from take_two.llm import get_llm
+    from take_two.stt.base import Transcript
 
     data = _improv_take(take_id)
     content = data.get("content", False) if body is None or body.content is None else body.content

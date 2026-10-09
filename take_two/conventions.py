@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import re
 
-from marked.config import Settings
-from marked.marks import normalize_word
-from marked.stt.base import Transcript, Word
+from take_two.config import Settings
+from take_two.marks import normalize_word
+from take_two.stt.base import Transcript, Word
 
 FILLERS_1 = {"um", "uh", "umm", "uhh", "erm", "er", "hmm", "mm", "like"}
 FILLERS_2 = {("you", "know"), ("i", "mean"), ("sort", "of"), ("kind", "of")}

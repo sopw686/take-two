@@ -1,11 +1,11 @@
-# Run Marked: creates the Python env with uv, builds the frontend once, starts the server.
+# Run Take Two: creates the Python env with uv, builds the frontend once, starts the server.
 #
 #   .\run.ps1            start on http://127.0.0.1:8765
 #   .\run.ps1 -Rebuild   force a frontend rebuild (it also rebuilds by itself when sources are newer than the build)
 #   .\run.ps1 -Cpu       force CPU speech-to-text
 #
 # Optional env vars: ANTHROPIC_API_KEY (Suggest marks, LLM define checks),
-# OPENAI_API_KEY + MARKED_STT=openai (cloud transcription), MARKED_STT_MODEL (base.en | small.en | ...).
+# OPENAI_API_KEY + TAKE_TWO_STT=openai (cloud transcription), TAKE_TWO_STT_MODEL (base.en | small.en | ...).
 
 param([switch]$Rebuild, [switch]$Cpu, [int]$Port = 8765)
 $ErrorActionPreference = "Stop"
@@ -19,7 +19,7 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
 
 $hasNvidia = [bool](Get-Command nvidia-smi -ErrorAction SilentlyContinue)
 if ($hasNvidia -and -not $Cpu) { uv sync --extra gpu } else { uv sync }
-if ($Cpu) { $env:MARKED_STT_DEVICE = "cpu" }
+if ($Cpu) { $env:TAKE_TWO_STT_DEVICE = "cpu" }
 
 $dist = Join-Path $root "frontend\dist\index.html"
 # Rebuild when any frontend source is newer than the last build, so a pulled or edited UI is never served stale.
@@ -42,5 +42,5 @@ if ($Rebuild -or $stale -or -not (Test-Path $dist)) {
     }
 }
 
-Write-Host "Marked -> http://127.0.0.1:$Port" -ForegroundColor Green
-uv run uvicorn marked.app:app --host 127.0.0.1 --port $Port
+Write-Host "Take Two -> http://127.0.0.1:$Port" -ForegroundColor Green
+uv run uvicorn take_two.app:app --host 127.0.0.1 --port $Port

@@ -1,7 +1,7 @@
 """Suggestion validator and caps, with a mocked model that over-marks."""
 
-from marked.marks import parse_script
-from marked.suggest import Proposal, ProposedMark, apply_marks, build_user_prompt, validate_and_cap
+from take_two.marks import parse_script
+from take_two.suggest import Proposal, ProposedMark, apply_marks, build_user_prompt, validate_and_cap
 
 LINES = [
     "Coral reefs cover less than one percent of the ocean floor yet they shelter a quarter of marine species.",
@@ -134,6 +134,6 @@ def test_prompt_mentions_goal_and_existing_sections():
 
 
 def test_term_with_symbol_words_does_not_crash():
-    from marked.suggest import _term_in_text
+    from take_two.suggest import _term_in_text
     assert _term_in_text("p < 0.05", "we found p < 0.05 here")
     assert not _term_in_text("p < 0.05", "we found nothing here")

@@ -13,9 +13,9 @@ from statistics import median
 
 import numpy as np
 
-from marked.audio import rms_db
-from marked.marks import Script
-from marked.prosody import f0_track, median_f0
+from take_two.audio import rms_db
+from take_two.marks import Script
+from take_two.prosody import f0_track, median_f0
 
 log = logging.getLogger(__name__)
 EMPH_DB = 3.0      # at least this much louder than the line's median

@@ -14,7 +14,7 @@ Each entry: what was decided, what else was considered, why.
 
 ## Speech-to-text
 
-**faster-whisper `small.en` by default, GPU when available, CPU int8 otherwise.** `small.en` was already cached on the dev machine and is a reasonable accuracy/speed point; `base.en` is a config switch (`MARKED_STT_MODEL`). GPU loading on Windows needs both `os.add_dll_directory` and a `PATH` prepend because CTranslate2 loads cuBLAS lazily with a plain `LoadLibrary`; without the PATH fix the model loads and then the first transcription fails or hangs. This pattern came from a sibling project where it was measured (20x slower on CPU).
+**faster-whisper `small.en` by default, GPU when available, CPU int8 otherwise.** `small.en` was already cached on the dev machine and is a reasonable accuracy/speed point; `base.en` is a config switch (`TAKE_TWO_STT_MODEL`). GPU loading on Windows needs both `os.add_dll_directory` and a `PATH` prepend because CTranslate2 loads cuBLAS lazily with a plain `LoadLibrary`; without the PATH fix the model loads and then the first transcription fails or hangs. This pattern came from a sibling project where it was measured (20x slower on CPU).
 
 **Whisper's own VAD filter stays on for transcription** (`vad_filter=True`, 500 ms min silence). It prevents hallucinated text ("Thank you.") inside the long deliberate pauses this product encourages; timestamps are mapped back to the original timeline, so pauses are not lost. Pause *measurement* never uses Whisper gaps alone (below).
 
@@ -50,7 +50,7 @@ Each entry: what was decided, what else was considered, why.
 
 ## Stretch features
 
-**`MARKED_LLM=fake` is a labelled development stand-in, not a fallback.** The brief forbids substituting a heuristic for suggestions when no key is set, and the app obeys: without a key the button is disabled with a one-line reason. The fake exists only so the review UI (ghost marks, reasons, accept/reject, caps) can be exercised and demoed without spending on a model; the UI names the provider "fake (development stand-in, not a real model)".
+**`TAKE_TWO_LLM=fake` is a labelled development stand-in, not a fallback.** The brief forbids substituting a heuristic for suggestions when no key is set, and the app obeys: without a key the button is disabled with a one-line reason. The fake exists only so the review UI (ghost marks, reasons, accept/reject, caps) can be exercised and demoed without spending on a model; the UI names the provider "fake (development stand-in, not a real model)".
 
 **Live pace is opt-in and warns about where the audio goes.** The Web Speech API in Chrome sends audio to Google. That contradicts "audio stays local", so the live pace checkbox is off by default, carries the warning inline, and the whole panel is hidden where the API does not exist. The measured report never depends on it.
 
@@ -70,7 +70,7 @@ Each entry: what was decided, what else was considered, why.
 
 **Pitch comes from Praat (parselmouth), now a runtime dependency.** Uptalk, monotone and opening energy are central to Improvise rather than an experimental extra, so `praat-parselmouth` moved from the `emphasis` extra into the main dependencies. librosa's pyin and "not measurable" remain as fallbacks. Uptalk is the last 40 % of a statement-final word's voiced frames against its first 60 %, in semitones; sentences ending in "?" are excluded. Monotone is the 10th–90th percentile pitch spread over the take.
 
-**Hesitation vs. deliberate pauses depends on where the silence falls.** A VAD silence after a word ending in `. ? !` and under 3 s is a deliberate pause between sentences, which the engagement card counts in your favour; the same silence mid-sentence, or over 3 s between sentences, is a hesitation. This uses Whisper's punctuation, which is imperfect, but the alternative (no distinction) would penalise the pauses Marked encourages elsewhere.
+**Hesitation vs. deliberate pauses depends on where the silence falls.** A VAD silence after a word ending in `. ? !` and under 3 s is a deliberate pause between sentences, which the engagement card counts in your favour; the same silence mid-sentence, or over 3 s between sentences, is a hesitation. This uses Whisper's punctuation, which is imperfect, but the alternative (no distinction) would penalise the pauses Take Two encourages elsewhere.
 
 **"kind of" and "sort of" are hedges in Improvise, fillers in the conventions preset.** Counting them twice would inflate both; Improvise skips them as fillers and drops noun uses ("a kind of tree").
 

@@ -15,9 +15,9 @@ import re
 
 from pydantic import BaseModel, Field
 
-from marked.define import _find_seq, _Flat
-from marked.marks import normalize_word
-from marked.stt.base import Transcript
+from take_two.define import _find_seq, _Flat
+from take_two.marks import normalize_word
+from take_two.stt.base import Transcript
 
 
 class ImprovSuggestion(BaseModel):

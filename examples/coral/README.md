@@ -9,7 +9,7 @@
 To regenerate the transcript (the result may differ slightly by model and device):
 
 ```powershell
-uv run python -c "import json; from marked.audio import load_audio; from marked.stt import get_transcriber; t = get_transcriber().transcribe(load_audio('examples/coral/audio.wav')); open('examples/coral/transcript.json', 'w', encoding='utf-8', newline='\n').write(json.dumps(t.to_dict(), indent=1) + '\n')"
+uv run python -c "import json; from take_two.audio import load_audio; from take_two.stt import get_transcriber; t = get_transcriber().transcribe(load_audio('examples/coral/audio.wav')); open('examples/coral/transcript.json', 'w', encoding='utf-8', newline='\n').write(json.dumps(t.to_dict(), indent=1) + '\n')"
 ```
 
 The voice is synthetic. Use this take to see what the report looks like, not as evidence about a real speaker.

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from marked.audio import Silence
-from marked.stt.base import Transcript, Word
+from take_two.audio import Silence
+from take_two.stt.base import Transcript, Word
 
 WORD_S = 0.3   # default spoken length of a word
 GAP_S = 0.1    # default gap after a word  -> 150 wpm

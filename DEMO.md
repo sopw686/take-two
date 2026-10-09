@@ -1,6 +1,6 @@
-# Demo: the speech about Marked (recommended)
+# Demo: the speech about Take Two (recommended)
 
-`demo_speech.md` is a ~2-minute talk *about* Marked, written in Marked's own marks (4 timed sections, 3 `[KEY]` lines, 9 pauses, 2 `[DEFINE]` terms, 233 words). You perform it into the app, so the demo is the pitch and the report grades the pitch.
+`demo_speech.md` is a ~2-minute talk *about* Take Two, written in Take Two's own marks (4 timed sections, 3 `[KEY]` lines, 9 pauses, 2 `[DEFINE]` terms, 233 words). You perform it into the app, so the demo is the pitch and the report grades the pitch.
 
 **Setup.** `.\run.ps1`, open http://127.0.0.1:8765, paste `demo_speech.md` on the Script tab. Do one practice take first so the budgets fit your pace (edit them; they are yours).
 
@@ -15,7 +15,7 @@ Leave both `[DEFINE]`s and the last two `[KEY]` lines intact so the report shows
 
 - **0:00 to 2:10: perform it.** Rehearse tab, Record, deliver the speech. The planned-section indicator and loudness meter move while you talk. Stop.
 - **2:10: the report.** *"That was the pitch. Here's how I did against my own marks."* Hover the red `KEY` on the irony line: *"Faster than my own median, and no pause after it. That's the one line I wrote about pauses."* Click it so it plays back.
-- **2:30.** Hover the `/` before "and Marked is listening": measured silence against the 0.7 s target. Then hover a green `//`: *"met your mark."*
+- **2:30.** Hover the `/` before "and Take Two is listening": measured silence against the 0.7 s target. Then hover a green `//`: *"met your mark."*
 - **2:45.** Point at the `DEFINE: voice activity detector` chip: defined, with the evidence quote and timestamp. Then the section bars: budget vs. spoken time.
 - **3:00: close.** *"No score. Each mark is something I chose, and the report tells me where I diverged from it."*
 
@@ -81,7 +81,7 @@ Stop.
 
 ## If something goes wrong
 
-- Transcription slow: `MARKED_STT_MODEL=base.en` and restart.
+- Transcription slow: `TAKE_TWO_STT_MODEL=base.en` and restart.
 - Microphone blocked: use the upload path with a phone recording, or **Load example take** (no microphone, no speech model, labelled as a synthetic voice).
 - Analysis failed after a take: the recording is not lost. Click **Retry** (it re-runs from the copy saved on disk) or **Download recording**. The take also stays in Takes as "Not analyzed" with Retry and Delete.
 - Fresh browser on the demo laptop: the Report tab opens the newest finished take on disk, so it never starts on "No take yet" if you recorded earlier.

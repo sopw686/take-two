@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from marked import config
-from marked.llm.base import LLM, NullLLM
+from take_two import config
+from take_two.llm.base import LLM, NullLLM
 
 _instance: LLM | None = None
 
@@ -12,10 +12,10 @@ def get_llm() -> LLM:
     global _instance
     if _instance is None:
         if config.LLM_MODE == "fake":
-            from marked.llm.fake_llm import FakeLLM
+            from take_two.llm.fake_llm import FakeLLM
             _instance = FakeLLM()
         elif config.ANTHROPIC_API_KEY:
-            from marked.llm.anthropic_llm import AnthropicLLM
+            from take_two.llm.anthropic_llm import AnthropicLLM
             _instance = AnthropicLLM(model=config.ANTHROPIC_MODEL)
         else:
             _instance = NullLLM()

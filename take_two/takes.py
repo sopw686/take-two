@@ -22,8 +22,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Iterator
 
-from marked import config
-from marked.marks import blank_comments
+from take_two import config
+from take_two.marks import blank_comments
 
 META = "take.json"
 # Identifies the server process that last worked on a take (recorded in take.json for diagnosis).

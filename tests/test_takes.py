@@ -1,7 +1,7 @@
 import pytest
 
-from marked import config, takes
-from marked.config import Settings
+from take_two import config, takes
+from take_two.config import Settings
 
 
 @pytest.mark.parametrize("bad", ["", "C:", "D:foo", "..", "../x", "a/b", "20261008-004237-3698/..", "x" * 20])

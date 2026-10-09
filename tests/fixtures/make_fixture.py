@@ -83,7 +83,7 @@ def load16k(path: Path) -> np.ndarray:
 
 
 def main() -> None:
-    tmp = Path(tempfile.mkdtemp(prefix="marked-fixture-"))
+    tmp = Path(tempfile.mkdtemp(prefix="take-two-fixture-"))
     pieces: list[np.ndarray] = []
     t = 0.0
     truth_lines: list[dict] = []

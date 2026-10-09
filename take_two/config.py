@@ -8,20 +8,20 @@ from pathlib import Path
 from pydantic import BaseModel, Field, model_validator
 
 ROOT = Path(__file__).resolve().parent.parent
-TAKES_DIR = Path(os.environ.get("MARKED_TAKES_DIR", ROOT / "takes"))
+TAKES_DIR = Path(os.environ.get("TAKE_TWO_TAKES_DIR", ROOT / "takes"))
 FRONTEND_DIST = ROOT / "frontend" / "dist"
 SAMPLE_SCRIPT = ROOT / "sample_script.md"
 EXAMPLES_DIR = ROOT / "examples"
 
-STT_BACKEND = os.environ.get("MARKED_STT", "local")  # local | openai
-STT_MODEL = os.environ.get("MARKED_STT_MODEL", "small.en")
-STT_DEVICE = os.environ.get("MARKED_STT_DEVICE", "auto")  # auto | cuda | cpu
-STT_VAD_FILTER = os.environ.get("MARKED_STT_VAD_FILTER", "1") not in ("0", "false", "no")
+STT_BACKEND = os.environ.get("TAKE_TWO_STT", "local")  # local | openai
+STT_MODEL = os.environ.get("TAKE_TWO_STT_MODEL", "small.en")
+STT_DEVICE = os.environ.get("TAKE_TWO_STT_DEVICE", "auto")  # auto | cuda | cpu
+STT_VAD_FILTER = os.environ.get("TAKE_TWO_STT_VAD_FILTER", "1") not in ("0", "false", "no")
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL = os.environ.get("MARKED_ANTHROPIC_MODEL", "claude-opus-5-5")
+ANTHROPIC_MODEL = os.environ.get("TAKE_TWO_ANTHROPIC_MODEL", "claude-opus-5-5")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-LLM_MODE = os.environ.get("MARKED_LLM", "auto")  # auto | fake (development stand-in for the suggestion UI)
+LLM_MODE = os.environ.get("TAKE_TWO_LLM", "auto")  # auto | fake (development stand-in for the suggestion UI)
 
 
 class Settings(BaseModel):

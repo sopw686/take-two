@@ -57,7 +57,7 @@ async function boot(): Promise<void> {
         : h("span", { class: "muted" }, " No LLM key configured: suggestions are off, everything else works."),
     );
   } catch (err) {
-    privacy.replaceChildren(h("span", { class: "warn" }, `Cannot reach the Marked server: ${(err as Error).message}`));
+    privacy.replaceChildren(h("span", { class: "warn" }, `Cannot reach the Take Two server: ${(err as Error).message}`));
   }
   if (!state.scriptText) {
     try {

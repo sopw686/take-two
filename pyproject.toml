@@ -1,7 +1,7 @@
 [project]
-name = "marked"
+name = "take-two"
 version = "0.1.0"
-description = "Marked: an intent-based rehearsal coach for science talks."
+description = "Take Two: an intent-based rehearsal coach for science talks."
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.115",
@@ -38,4 +38,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["marked"]
+packages = ["take_two"]

@@ -1,6 +1,6 @@
-# Marked
+# Take Two
 
-Marked is a rehearsal coach for science talks that checks your delivery against **your own marks**, not a universal standard. You mark up the script the way performers mark a poem: slow down here, pause here, define this term aloud. Then you rehearse out loud and the report shows, line by line, where the take diverged from what you intended.
+Take Two is a rehearsal coach for science talks that checks your delivery against **your own marks**, not a universal standard. You mark up the script the way performers mark a poem: slow down here, pause here, define this term aloud. Then you rehearse out loud and the report shows, line by line, where the take diverged from what you intended.
 
 ## Run it
 
@@ -23,11 +23,11 @@ Everything runs locally by default. Audio never leaves your computer unless you 
 | Variable | Effect |
 |---|---|
 | `ANTHROPIC_API_KEY` | Enables **Suggest marks** and LLM-checked `[DEFINE]` terms. Without it, suggestions are disabled with a one-line note and definitions use a heuristic, labelled as such. |
-| `OPENAI_API_KEY` + `MARKED_STT=openai` | Transcribe with OpenAI's Whisper API instead of locally. The UI shows a banner when audio leaves the machine. |
-| `MARKED_STT_MODEL` | Local model: `base.en` (faster), `small.en` (default), `medium.en`, … |
-| `MARKED_STT_DEVICE` | `auto` (default), `cuda`, or `cpu`. |
-| `MARKED_TAKES_DIR` | Where takes are saved (default `takes/` next to the app). If that folder is inside a cloud-synced folder (OneDrive, Dropbox, iCloud), the sync client uploads your recordings; point this at a local folder to keep audio on the machine. |
-| `MARKED_LLM=fake` | Development only: a labelled stand-in model so the suggestion UI can be tried without a key. Not a fallback; without it and without a key, suggestions stay off. |
+| `OPENAI_API_KEY` + `TAKE_TWO_STT=openai` | Transcribe with OpenAI's Whisper API instead of locally. The UI shows a banner when audio leaves the machine. |
+| `TAKE_TWO_STT_MODEL` | Local model: `base.en` (faster), `small.en` (default), `medium.en`, … |
+| `TAKE_TWO_STT_DEVICE` | `auto` (default), `cuda`, or `cpu`. |
+| `TAKE_TWO_TAKES_DIR` | Where takes are saved (default `takes/` next to the app). If that folder is inside a cloud-synced folder (OneDrive, Dropbox, iCloud), the sync client uploads your recordings; point this at a local folder to keep audio on the machine. |
+| `TAKE_TWO_LLM=fake` | Development only: a labelled stand-in model so the suggestion UI can be tried without a key. Not a fallback; without it and without a key, suggestions stay off. |
 
 ## Mark syntax
 
@@ -82,7 +82,7 @@ See `TESTING.md` for what is covered, what was checked by hand, and known weak s
 ## Layout
 
 ```
-marked/           FastAPI backend: parser, STT adapters, VAD, alignment, analysis, LLM features, Improvise (improv*.py, prosody.py, topics.py)
+take_two/           FastAPI backend: parser, STT adapters, VAD, alignment, analysis, LLM features, Improvise (improv*.py, prosody.py, topics.py)
 frontend/         Vite + TypeScript UI, built into frontend/dist and served by the backend
 tests/            unit tests + a synthetic TTS fixture with known ground truth (uv run pytest; -m slow for STT)
 takes/            your recordings and analyses, one folder per take (not committed)

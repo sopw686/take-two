@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from marked import pipeline
-from marked.config import Settings
+from take_two import pipeline
+from take_two.config import Settings
 
 HERE = Path(__file__).resolve().parent / "fixtures"
 pytestmark = pytest.mark.slow
@@ -19,7 +19,7 @@ pytestmark = pytest.mark.slow
 
 @pytest.fixture(scope="module")
 def result(tmp_path_factory, monkeypatch_module):
-    from marked import config
+    from take_two import config
     monkeypatch_module.setattr(config, "TAKES_DIR", tmp_path_factory.mktemp("takes"))
     script = (HERE / "fixture_script.md").read_text(encoding="utf-8")
     return pipeline.run_take(HERE / "fixture.wav", script, Settings(), label="fixture", original_name="fixture.wav")
