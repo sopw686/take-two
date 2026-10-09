@@ -160,7 +160,9 @@ def reanalyze(take_id: str, script_text: str, settings: Settings, label: str | N
         drill = meta.get("drill") if meta.get("kind") == "drill" else None
         # A drill is one line or section: its rates are judged against the median of the full take it came from.
         override = {"median_wpm": drill.get("parent_median_wpm"), "source": "your full take"} if drill else None
-        result = analyze(script, transcript, silences, settings, duration, baseline_override=override)
+        from take_two.clarity import load_dismissed
+        result = analyze(script, transcript, silences, settings, duration, baseline_override=override,
+                         dismissed=frozenset(load_dismissed()))
         result.update({
             "take_id": take_id,
             "created_at": prev.get("created_at") or takes.load_meta(take_id)["created_at"],
@@ -189,7 +191,7 @@ def reanalyze(take_id: str, script_text: str, settings: Settings, label: str | N
             from take_two.emphasis import emphasis_report
             result["emphasis"] = emphasis_report(script, result, audio, audio_mod.SR)
         if drill:
-            result["drill_summary"] = drill_summary(result, drill)
+            result["drill_summary"] = word_drill_summary(transcript, drill) if drill.get("kind") == "word"                 else drill_summary(result, drill)
             # The drill card lists every mark; a whole-talk check or a focus list of one line would only repeat it.
             result["fit_total"] = {"status": "not_measurable", "reason": "A drill covers one line or section."}
         from take_two.focus import focus
@@ -218,6 +220,19 @@ def _initial_prompt(settings: Settings) -> str | None:
 _RATE = {"met": "met your mark", "near": "close to your mark", "diverged": "diverged from your mark"}
 _PAUSE = {"met": "met your mark", "short": "shorter than your mark", "missing": "no pause found"}
 _SECTION = {"met": "within your budget", "over": "over budget", "under": "under budget"}
+
+
+def word_drill_summary(transcript: Transcript, drill: dict) -> list[str]:
+    """What the recognizer heard for a one-word drill, with its confidence. Measured, not judged."""
+    from take_two.clarity import word_key
+    want = word_key(drill.get("word", ""))
+    heard = [w for w in transcript.words if word_key(w.text) == want]
+    if heard:
+        best = max(heard, key=lambda w: w.prob)
+        return [f"This try: the recognizer heard “{drill['word']}” with confidence {best.prob:.2f}."]
+    said = " ".join(w.text for w in transcript.words).strip()
+    return [f"This try: the recognizer heard “{said}”, not “{drill['word']}”." if said
+            else "This try: the recognizer heard no words."]
 
 
 def drill_summary(result: dict, drill: dict) -> list[str]:
@@ -266,14 +281,15 @@ def drill_summary(result: dict, drill: dict) -> list[str]:
     return out
 
 
-def create_drill(parent_id: str, upload: bytes, original_name: str, kind: str, index: int, settings: Settings) -> str:
+def create_drill(parent_id: str, upload: bytes, original_name: str, kind: str, index: int, settings: Settings,
+                 word: int | None = None) -> str:
     """A take of one line or section of the parent's script, linked to the parent and carrying its median."""
     parent = takes.load_take(parent_id)
     if parent is None:
         raise ValueError("the take to drill from has not been analyzed")
     if parent.get("mode") == "improv" or parent.get("kind", "take") != "take":
         raise ValueError("drills compare with one of your own full script takes; this take is not one")
-    sub, info = drill_script((takes.take_path(parent_id) / "script.md").read_text(encoding="utf-8"), kind, index)
+    sub, info = drill_script((takes.take_path(parent_id) / "script.md").read_text(encoding="utf-8"), kind, index, word)
     info["parent_median_wpm"] = parent.get("baseline", {}).get("median_wpm")
     return takes.new_take("script", upload=upload, original_name=original_name, settings=settings.model_dump(),
                           label=f"Drill: {info['what']}", script=sub, kind="drill", drill_of=parent_id, drill=info)

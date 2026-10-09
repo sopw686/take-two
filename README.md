@@ -38,6 +38,7 @@ uv run pytest            # unit tests, about 20 seconds
 uv run pytest -m slow    # synthetic fixture through real local speech-to-text
 uv run pytest -m browser # record, stop and read the report in Chrome with a fake microphone (needs Google Chrome, ~90 s)
 uv run python -m eval.run   # evaluation against labelled recordings -> eval/RESULTS.md (see eval/README.md)
+cd frontend; npm test       # the frontend's pure logic (cue plan -> utterances) under Node's test runner (Node 22+)
 uv run python scripts/writeup_pdf.py           # WRITEUP.md -> WRITEUP.pdf; fails if over one page or a required section is missing
 uv run python scripts/writeup_pdf.py --watch   # rebuild the PDF every time WRITEUP.md is saved
 ```
@@ -58,6 +59,7 @@ More detail: [TESTING.md](TESTING.md), [DECISIONS.md](DECISIONS.md), [eval/READM
 | `word // word` | Deliberate long pause (default ≥ 1.5 s) | Same |
 | `[DEFINE: term]` | A term your audience may not know (technical term, in-joke, reference) must be explained aloud at or before its first use | Where the term was first spoken and whether a definition precedes it |
 | `*word*` | Emphasis (experimental, off by default) | Loudness and pitch of the word vs. the rest of its line |
+| `[SAY: word = KOH-ral \| ˈkɔːrəl]` | How you say a word (a respelling, optional IPA), used by Hear it | Not measured: the report does not check pronunciation |
 
 All thresholds are yours to change in **Settings**. Wording in the report is "met your mark" / "diverged from your mark"; there is no score.
 
@@ -67,7 +69,7 @@ All thresholds are yours to change in **Settings**. Wording in the report is "me
 <!-- take-two: short_pause_s=0.9 key_slower_pct=15 conventions_enabled=true -->
 ```
 
-sets those thresholds for every take of that script, over the Settings dialog, so a script shared with a colleague or recorded on another machine is measured the same way. The names are the Settings field names (`short_pause_s`, `long_pause_s`, `pause_near_ratio`, `key_slower_pct`, `key_pause_after_s`, `section_tolerance_pct`, `line_min_coverage`, `baseline_min_words`, `min_silence_s`, `fuzzy_match_ratio`, `fuzzy_min_chars`, `paraphrase_min_words_pct`, `conventions_enabled`, `conventions_wpm_min`, `conventions_wpm_max`, `conventions_filler_per_100`, `emphasis_enabled`, and the `improv_…` bands). Only the first non-blank line counts; it is a comment, so it moves no line numbers. The editor says what the line sets (or what is wrong with it) as you type, the Settings dialog marks those fields, and the report lists the values that came from the script. A take with an invalid line is refused before anything is saved.
+sets those thresholds for every take of that script, over the Settings dialog, so a script shared with a colleague or recorded on another machine is measured the same way. The names are the Settings field names (`short_pause_s`, `long_pause_s`, `pause_near_ratio`, `key_slower_pct`, `key_pause_after_s`, `section_tolerance_pct`, `line_min_coverage`, `baseline_min_words`, `min_silence_s`, `fuzzy_match_ratio`, `fuzzy_min_chars`, `paraphrase_min_words_pct`, `conventions_enabled`, `conventions_wpm_min`, `conventions_wpm_max`, `conventions_filler_per_100`, `emphasis_enabled`, `hear_baseline_wpm`, `hear_register`, `coach_slow_pct`, `coach_pause_s`, `clarity_prob`, `clarity_context_words`, and the `improv_…` bands). Only the first non-blank line counts; it is a comment, so it moves no line numbers. The editor says what the line sets (or what is wrong with it) as you type, the Settings dialog marks those fields, and the report lists the values that came from the script. A take with an invalid line is refused before anything is saved.
 
 **Import from PowerPoint notes** (Script tab): each slide becomes a `## Slide N: title` section and its speaker notes become the lines, ready for budgets and marks. A slide without notes stays as an empty section, shown as "no script lines" in the report. The file is read by this app on your machine and not kept.
 
@@ -85,11 +87,37 @@ The Rehearse tab shows the script as a **teleprompter**: large type (A−/A+, re
 - While a take is analyzed, the page shows each stage: decoding, transcribing, aligning, definition check.
 - Takes tab: every take you recorded, and a mark-by-mark comparison across takes of the same script ("you rushed this key line in 3 of 4 takes"), with a ▶ in each cell to hear that take at that mark (A/B listening). Each take can be renamed, deleted (with its drills; the confirmation names the folder that will be removed) or downloaded as its folder (.zip). **Download outcomes (CSV)** gives every mark's status and numbers across your takes for a spreadsheet or a study, with no names, script text, transcript or audio in it.
 - **Export report** (report and Takes tab): the report as one HTML file with the recording inside, every number and tooltip printed, click a line to hear it. It opens offline, so you can send it to an advisor; the app asks first if it would be over 20 MB.
+- **Words that may not have been clear**: script words the recognizer heard as another word ("The script says “bleaching”; the recognizer heard “leaching” (confidence 0.57).") or was less sure of than your threshold, each with its time (click to hear it), **Hear it** (the word slowly, then at an ordinary pace) and **Drill this word** (say just that word; the result is what the recognizer heard, with its confidence). A recognizer can miss a word because of an accent, a noisy microphone, a rare word or a quiet moment, and the card says so; **I said it fine** leaves a word out of later reports.
+- **Hear it** on each `[KEY]` line (see below), with **Try it** opening that line's drill.
 - **Drill** a `[KEY]` line or a section from the report: record just that part, judged against the median of the full take it came from ("This try: 18% slower than your median from the full take; pause after 0.9 s: met your mark"). Drills are listed under their take.
 - **Load example take** (Report and Takes tabs): a synthetic-voice take of a short coral-reef script, analyzed instantly from a committed transcript. It needs no microphone and no speech model, so you can see a full report on any machine. It is labelled as synthetic and left out of comparisons.
 - A failed analysis never loses the recording: the take stays in Takes as "Not analyzed" with Retry (re-runs from the copy on disk) and Delete, and the page offers Download recording.
 - Optional, only when switched on in Settings: a "conference conventions" preset (overall pace band, filler words per 100) and an experimental emphasis check for `*word*`.
 - With an API key: "Suggestions based on your measurements", at most three, each citing a measured number and the mark it concerns.
+
+## Hear it
+
+A synthetic voice demonstrates one line, so you can hear what your marks ask for before you try it. It is on every line of the Script tab (**Hear your lines**), on the report's `[KEY]` lines and in a line drill. Two versions, back to back:
+
+- **As I marked it**: only what you wrote, read the way the report reads it. `/` and `//` are timed silences of your own short- and long-pause settings; a `[KEY]` line is said your `key_slower_pct` slower than your median from that take (or your latest take), then your pause; a `*word*` is louder and higher; a `[SAY]` word is said your way. Before your first take there is no median, so a typical 150 wpm baseline is used and labelled as a baseline, never as your rate. A line with no marks is spoken plainly.
+- **Coach's version**: your marks, plus a delivery the coach invents: which word to stress, which to slow down, a rising, falling or held end on each phrase, extra pauses, softer and lower for a sincere line, a build toward a turn, an overall pace. With an API key a model invents it from the line and the register you picked; code keeps only cues whose words are copied verbatim from the line, clamps every number, caps the count and requires a reason for each. Without a key it comes from the register's plain rules, labelled "heuristic, not a model"; with neither a key nor a register it is off and says why. Your written marks are never removed or shortened, only added to.
+
+Under the button is the plan in words: "slower: 10% below your median (150 wpm → 135)", "0.7 s pause after “result” (your short-pause setting)". Each cue says whether the report **checks** it or it is a **demonstration only**. The coach's cues are labelled **coach's suggestion**; **Accept into script** turns the ones that have a mark (a pause, a stressed word) into real marks, so the next take checks them. A contour, a slowed word or a pace change has no mark and stays a demonstration. **Try it** opens the line drill: you say the line and it is measured against the same marks and the same median.
+
+A **register** is a starting point you pick in Settings (off until you do). It tells the coach what landing it means for this speech, and it is never used to judge a take:
+
+| Register | The coach's rules |
+|---|---|
+| Conversational / technical talk | Phrases of about 3–5 s; slow down for numbers, definitions and the main result; pause before and after the point; one or two stressed words per sentence at most; a falling end on statements, so a claim sounds finished |
+| Celebratory (toast, tribute) | Warmth over speed, slightly slower overall; a pause after the punchline for the room to react; lower and slower for the sincere line; the last line slowest, a clear falling end, then silence |
+| Performance poetry / slam | The line break is a breath; build pace and volume toward the turn, drop just before it; contrast; end lines on a held or falling note; the last line gets the longest pause |
+| Pitch / interview | Lead with the claim; slow down on the number and the ask; no trailing off |
+
+How much slower a slowed word is and how long an added pause is are yours too (Settings → Hear it).
+
+**Voices.** By default your browser's own voice speaks (local, no key, no network). It gives coarse control of pace and pitch and none of tone, so a rising or falling end is approximated by saying the last word a little higher or lower; the panel says so. Pick a voice (remembered). Optionally, with `TAKE_TWO_TTS=azure` and an Azure Speech key, a server voice speaks SSML (real breaks, prosody, pitch contours, IPA pronunciations); it receives the text of the line you play and nothing else, only after you choose it and confirm what it sends. The synthetic audio is never saved with a take or analyzed. On screen: "Synthetic demonstration of your marks. It shows one way to do it, not the way."
+
+**Words worth checking** (Script tab) lists names, loanwords, acronyms and uncommon words (rarity is read from the speech recognizer's own vocabulary). With an API key each gets a proposed pronunciation, a respelling such as KOH-ral and IPA where useful, labelled "proposed pronunciation: confirm it", because a model can be wrong about names. Edit it, hear it syllable by syllable, and **Confirm** to write a `[SAY]` mark into your script. Without a key you type how you say it.
 
 ## Improvise
 
@@ -120,11 +148,13 @@ Before recording, choose **Delivery only** (fully local) or **Delivery + content
 | `TAKE_TWO_STT_DEVICE` | `auto` (default), `cuda`, or `cpu`. |
 | `TAKE_TWO_TAKES_DIR` | Where takes are saved (default `takes/` next to the app). If that folder is inside a cloud-synced folder (OneDrive, Dropbox, iCloud), the sync client uploads your recordings; point this at a local folder to keep audio on the machine. |
 | `TAKE_TWO_LLM=fake` | Development only: a labelled stand-in model so the suggestion UI can be tried without a key. Not a fallback; without it and without a key, suggestions stay off. |
+| `TAKE_TWO_TTS=azure` + `AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION` | Offers an Azure Speech voice for Hear it (SSML). It is sent the text of the line you play, only after you pick it and confirm; the banner says so. `TAKE_TWO_AZURE_VOICE` picks the voice (default `en-US-JennyNeural`). Not yet run against Azure (no key on the development machine). |
+| `TAKE_TWO_TTS=fake` | Development only: a labelled server "voice" that plays tones in place of speech, with the plan's timing. |
 
 ## Project layout
 
 ```
-take_two/           FastAPI backend: parser, STT adapters, VAD, alignment, analysis, LLM features, Improvise (improv*.py, prosody.py, topics.py)
+take_two/           FastAPI backend: parser, STT adapters, VAD, alignment, analysis, LLM features, Improvise (improv*.py, prosody.py, topics.py), Hear it (delivery.py, pronounce.py, clarity.py, tts.py)
 frontend/         Vite + TypeScript UI, built into frontend/dist and served by the backend
 tests/            unit tests + a synthetic TTS fixture with known ground truth (uv run pytest; -m slow for STT)
 takes/            your recordings and analyses, one folder per take (not committed)

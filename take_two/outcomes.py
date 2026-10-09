@@ -39,7 +39,7 @@ def outcome_rows(a: dict) -> list[dict]:
     add("median", "median rate", "", b.get("median_wpm"), "wpm")
     for s in a.get("sections", []):
         # A line drill's one section is that line under its section's name, not the section: no row.
-        if s["status"] != "no_lines" and not (drill and drill.get("kind") == "line"):
+        if s["status"] != "no_lines" and not (drill and drill.get("kind") in ("line", "word")):
             add(f"section:S{s['index'] + so + 1}", "section", s["status"], s.get("duration_s"), "s", s.get("budget_s"))
     for ln in a.get("lines", []):
         k = ln.get("key")

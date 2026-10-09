@@ -13,6 +13,7 @@ from statistics import median
 
 from take_two.align import Alignment, TokenAlignment, adlib_spans, align
 from take_two.audio import Silence, longest_silence_between
+from take_two.clarity import clarity_report
 from take_two.config import Settings
 from take_two.marks import Script, Token, format_budget, normalize_word
 from take_two.stt.base import Transcript
@@ -165,8 +166,9 @@ def total_fit(section_rows: list[dict], spoken_start: float | None, spoken_end: 
 
 
 def analyze(script: Script, transcript: Transcript, silences: list[Silence], settings: Settings,
-            audio_duration: float, baseline_override: dict | None = None) -> dict:
-    """baseline_override {"median_wpm", "source"}: judge rates against another take's median (a drill has none of its own)."""
+            audio_duration: float, baseline_override: dict | None = None, dismissed: frozenset[str] = frozenset()) -> dict:
+    """baseline_override {"median_wpm", "source"}: judge rates against another take's median (a drill has none of its own).
+    dismissed: words the speaker marked "I said it fine", left out of the clarity list."""
     al = align(script, transcript, settings)
     n_lines = len(script.lines)
 
@@ -409,5 +411,6 @@ def analyze(script: Script, transcript: Transcript, silences: list[Silence], set
         "pauses": pause_rows,
         "defines": [],
         "summary": summary,
+        "clarity": clarity_report(script, al, transcript, ok_lines, settings, dismissed),
         "unmatched_transcript_words": len(transcript.words) - len(al.matched_transcript),
     }

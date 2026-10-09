@@ -32,7 +32,32 @@ class FakeLLM:
             return output.model_validate(self._qa_review(user))  # type: ignore[return-value]
         if output.__name__ == "QuestionsOutput":
             return output.model_validate(self._questions(user))  # type: ignore[return-value]
+        if output.__name__ == "CoachOutput":
+            return output.model_validate(self._coach(user))  # type: ignore[return-value]
+        if output.__name__ == "SayingsOutput":
+            return output.model_validate(self._sayings(user))  # type: ignore[return-value]
         return None  # define checks fall back to the heuristic
+
+    @staticmethod
+    def _coach(user: str) -> dict:
+        m = re.search(r"^The line, exactly as spoken: (.*)$", user, flags=re.M)
+        words = (m.group(1) if m else "").split()
+        if not words:
+            return {"cues": []}
+        longest = max(words, key=lambda w: len(w.strip(".,;:!?")))
+        return {"pace_pct": -5, "pace_reason": "(fake) A little slower than your median.", "cues": [
+            {"kind": "stress", "text": longest, "reason": "(fake) The longest word, stressed so the stand-in does something."},
+            {"kind": "contour", "text": words[-1], "contour": "fall", "reason": "(fake) A falling end."},
+            {"kind": "pause", "text": " ".join(words[:2]), "pause_s": 0.5, "reason": "(fake) A short pause after the opening words."},
+            {"kind": "slow", "text": "words nobody wrote", "reason": "(fake) Not in the line, so code should drop it."},
+        ]}
+
+    @staticmethod
+    def _sayings(user: str) -> dict:
+        found = re.findall(r"^- (.+?)  \(line:", user, flags=re.M)
+        return {"words": [{"word": w, "respelling": "-".join(w[i:i + 3].upper() if i == 0 else w[i:i + 3].lower()
+                                                            for i in range(0, len(w), 3)).replace(" ", "-"),
+                           "ipa": ""} for w in found] + [{"word": "notinthescript", "respelling": "NOT", "ipa": ""}]}
 
     @staticmethod
     def _improv_coach(user: str) -> dict:

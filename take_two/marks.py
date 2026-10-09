@@ -5,6 +5,7 @@
     /  //                    short / long deliberate pause (whitespace-delimited)
     [DEFINE: term]           term must be explained aloud at or before first use
     *word*                   emphasis (experimental)
+    [SAY: word = KOH-ral | ˈkɔːrəl]   how you say a word (respelling, optional IPA); for Hear it only
 
 Marks are stripped before alignment. Lines are non-blank, non-header lines.
 """
@@ -17,6 +18,8 @@ from dataclasses import dataclass, field
 SECTION_RE = re.compile(r"^\s*##\s*(?P<name>.*?)\s*(?:\[(?P<m>\d+):(?P<s>\d{1,2})\])?\s*$")
 KEY_RE = re.compile(r"^\s*\[KEY\]\s*", re.IGNORECASE)
 DEFINE_RE = re.compile(r"\[DEFINE:\s*(?P<term>[^\]]+?)\s*\]", re.IGNORECASE)
+# [SAY: word = respelling | ipa]: the speaker's own pronunciation of a word. Never aligned or measured.
+SAY_RE = re.compile(r"\[SAY:\s*(?P<word>[^\]=|]+?)\s*=\s*(?P<say>[^\]|]+?)\s*(?:\|\s*(?P<ipa>[^\]]+?)\s*)?\]", re.IGNORECASE)
 PAUSE_RE = re.compile(r"^(?P<kind>//?)$")
 EMPH_RE = re.compile(r"^\*(?P<word>[^\s*]+)\*(?P<punct>[^\w\s*]*)$")  # *word*, keeps trailing punctuation
 COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
@@ -98,6 +101,14 @@ class DefineMark:
 
 
 @dataclass
+class SayMark:
+    word: str            # as written in the mark
+    respelling: str      # e.g. "KOH-ral"
+    ipa: str | None
+    line: int
+
+
+@dataclass
 class Line:
     index: int
     section: int
@@ -129,6 +140,12 @@ class Script:
     sections: list[Section]
     lines: list[Line]
     defines: list[DefineMark]
+    says: list[SayMark] = field(default_factory=list)
+
+    @property
+    def lexicon(self) -> dict[str, SayMark]:
+        """{normalized word: its [SAY] mark}; a later mark for the same word wins."""
+        return {" ".join(normalize_word(s.word)): s for s in self.says if normalize_word(s.word)}
 
     @property
     def tokens(self) -> list[Token]:
@@ -148,6 +165,7 @@ def strip_line_marks(raw: str) -> tuple[str, bool, list[str], list[PauseMark], l
     s = KEY_RE.sub("", raw, count=1) if is_key else raw
     terms = [m.group("term").strip() for m in DEFINE_RE.finditer(s)]
     s = DEFINE_RE.sub(" ", s)
+    s = SAY_RE.sub(" ", s)
 
     pauses: list[PauseMark] = []
     emphasis: list[int] = []
@@ -171,6 +189,7 @@ def parse_script(text: str) -> Script:
     sections: list[Section] = []
     lines: list[Line] = []
     defines: list[DefineMark] = []
+    says: list[SayMark] = []
 
     for raw_no, raw in enumerate(text.splitlines()):
         if not raw.strip():
@@ -204,7 +223,17 @@ def parse_script(text: str) -> Script:
         sections[sec].line_end = li + 1
         for t in terms:
             defines.append(DefineMark(term=t, line=li, section=sec))
-    return Script(sections=sections, lines=lines, defines=defines)
+        for m in SAY_RE.finditer(raw):
+            says.append(SayMark(word=m.group("word").strip(), respelling=m.group("say").strip(),
+                                ipa=(m.group("ipa") or "").strip() or None, line=li))
+    return Script(sections=sections, lines=lines, defines=defines, says=says)
+
+
+def say_mark(word: str, respelling: str, ipa: str | None = None) -> str:
+    """The [SAY] mark for a confirmed pronunciation. Brackets, = and | cannot appear inside it."""
+    clean = lambda s: re.sub(r"[\[\]=|]", "", s).strip()  # noqa: E731
+    ipa_part = f" | {clean(ipa)}" if ipa and clean(ipa) else ""
+    return f"[SAY: {clean(word)} = {clean(respelling)}{ipa_part}]"
 
 
 def strip_marks(text: str) -> str:
@@ -224,11 +253,12 @@ def format_budget(seconds: float | None) -> str:
     return f"{m}:{s:02d}"
 
 
-def drill_script(text: str, kind: str, index: int) -> tuple[str, dict]:
+def drill_script(text: str, kind: str, index: int, word: int | None = None) -> tuple[str, dict]:
     """The part of a script to drill, as its own small script.
 
     kind "line": that line under its section's name, without the budget (one line is not
-    a section's worth of time). kind "section": the section header with its budget, and
+    a section's worth of time). kind "word": word `word` of line `index` alone (with its
+    [SAY] mark, if the script has one), to practise saying it clearly. kind "section": the section header with its budget, and
     its lines. A settings line at the top of the script is kept. Raises ValueError for an
     index that does not exist or a section with no lines.
     """
@@ -254,6 +284,15 @@ def drill_script(text: str, kind: str, index: int) -> tuple[str, dict]:
         out = header + [script.lines[i].raw for i in range(sec.line_start, sec.line_end)]
         info = {"kind": "section", "index": index, "line_start": sec.line_start, "line_end": sec.line_end,
                 "section": sec.index, "what": f"section {sec.name or index + 1}"}
+    elif kind == "word":
+        if not 0 <= index < len(script.lines) or word is None or not 0 <= word < len(script.lines[index].tokens):
+            raise ValueError("no such word")
+        ln = script.lines[index]
+        text_w = ln.tokens[word].text.strip(".,;:!?\"'()[]{}…“”‘’")
+        say = script.lexicon.get(" ".join(normalize_word(text_w)))
+        out = [text_w + (" " + say_mark(say.word, say.respelling, say.ipa) if say else "")]
+        info = {"kind": "word", "index": index, "word_index": word, "line_start": index, "line_end": index + 1,
+                "section": ln.section, "word": text_w, "what": f"“{text_w}” (line {index + 1})"}
     else:
-        raise ValueError("kind must be line or section")
+        raise ValueError("kind must be line, section or word")
     return "\n".join(([keep.strip()] if keep else []) + out) + "\n", info

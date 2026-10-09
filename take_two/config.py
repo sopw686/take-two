@@ -6,7 +6,7 @@ import difflib
 import os
 import re
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError, model_validator
 
@@ -74,6 +74,17 @@ class Settings(BaseModel):
     improv_pitch_range_st: float = Field(5.0, ge=0.5, le=24.0)
     improv_loudness_var_db: float = Field(2.5, ge=0.0, le=20.0)
     improv_pace_var_pct: float = Field(10.0, ge=0.0, le=100.0)
+    # Hear it: a synthetic voice demonstrates a line. The baseline is used only before you have a take of
+    # your own (and is labelled as such); a register is off until you pick one; the coach's amounts are yours.
+    hear_baseline_wpm: float = Field(150.0, ge=80.0, le=250.0)
+    hear_register: Literal["none", "technical", "celebratory", "slam", "pitch"] = "none"
+    coach_slow_pct: float = Field(25.0, ge=5.0, le=60.0)
+    coach_pause_s: float = Field(0.6, ge=0.1, le=3.0)
+    # Words that may not have been clear: recognizer confidence below clarity_prob, or heard as another word.
+    # A low-confidence word that matched the script exactly is skipped when clarity_context_words words on
+    # each side also matched exactly with high confidence (0 turns the skip off).
+    clarity_prob: float = Field(0.5, ge=0.05, le=0.95)
+    clarity_context_words: int = Field(2, ge=0, le=5)
 
     @model_validator(mode="after")
     def _band_order(self) -> "Settings":

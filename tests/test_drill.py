@@ -222,3 +222,19 @@ def test_compare_lists_line_up_with_takes_when_a_mark_is_missing():
     m = cmp["marks"][0]
     assert m["statuses"] == [None, "met"] and m["values"] == [None, 0.8] and m["times"] == [None, [1.0, 1.8]]
     assert m["takes"] == 1 and m["latest"] == "met"
+
+
+def test_word_drill_says_what_the_recognizer_heard(client):
+    parent = _parent(client)
+    assert "clarity" in parent and parent["clarity"]["words"] == []
+    Said.text = "method"
+    d = client.post(f"/api/takes/{parent['take_id']}/drill", files={"audio": ("d.wav", _wav(2.0), "audio/wav")},
+                    data={"kind": "word", "index": "2", "word": "6"})
+    assert d.status_code == 200, d.text
+    a = d.json()
+    assert a["drill"]["kind"] == "word" and a["drill"]["word"] == "method"
+    assert a["drill_summary"] == ["This try: the recognizer heard “method” with confidence 1.00."]
+    Said.text = "mess it"
+    a = client.post(f"/api/takes/{parent['take_id']}/drill", files={"audio": ("d.wav", _wav(2.0), "audio/wav")},
+                    data={"kind": "word", "index": "2", "word": "6"}).json()
+    assert a["drill_summary"] == ["This try: the recognizer heard “mess it”, not “method”."]

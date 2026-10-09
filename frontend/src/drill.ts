@@ -7,7 +7,21 @@ import { h } from "./dom";
 import { player, playSegment, stopSegment } from "./player";
 import { Recorder, showLevel } from "./recorder";
 import { state } from "./state";
+import { closeHear, hearPanel } from "./hearit";
+import { stopAll } from "./speaker";
 import type { Analysis } from "./types";
+
+/** Hear the drilled line first, with the take's own script and median; Try it is the Record button below. */
+function hearInline(parent: Analysis, index: number): HTMLElement {
+  const box = h("details", { class: "drill-hear" }, h("summary", { class: "small" }, "Hear it first"));
+  box.addEventListener("toggle", () => {
+    if (box.open && !box.querySelector(".hear-panel")) {
+      box.append(hearPanel({ lineIndex: index, script: () => null, takeId: parent.take_id,
+        tryIt: "Try it is the Record button below." }));
+    }
+  });
+  return box;
+}
 
 let active: { rec: Recorder | null; panel: HTMLElement } | null = null;
 const settingsBtn = () => document.getElementById("settings-btn");
@@ -20,18 +34,25 @@ export function stopDrill(): void {
   active = null;
 }
 
+export type DrillKind = "line" | "section" | "word";
+
 /** A Drill button that opens the recorder right after `anchor` (a report line or section heading). */
-export function drillButton(parent: Analysis, kind: "line" | "section", index: number, what: string, anchor: () => HTMLElement): HTMLElement {
-  return h("button", { class: "ghost-btn small drill-btn", type: "button", title: `Record just ${what} and compare it with this take's median`,
-    onClick: (e) => { e.stopPropagation(); openDrill(parent, kind, index, what, anchor()); } }, "Drill");
+export function drillButton(parent: Analysis, kind: DrillKind, index: number, what: string, anchor: () => HTMLElement,
+  word: number | null = null, label = "Drill"): HTMLElement {
+  return h("button", { class: "ghost-btn small drill-btn", type: "button",
+    title: kind === "word" ? `Record just ${what} and see what the recognizer heard` : `Record just ${what} and compare it with this take's median`,
+    onClick: (e) => { e.stopPropagation(); openDrill(parent, kind, index, what, anchor(), word); } }, label);
 }
 
-function openDrill(parent: Analysis, kind: "line" | "section", index: number, what: string, anchor: HTMLElement): void {
+export function openDrill(parent: Analysis, kind: DrillKind, index: number, what: string, anchor: HTMLElement, word: number | null = null): void {
   stopDrill();
+  closeHear();
+  stopAll();  // a demonstration must never end up in the recording
   const meterBar = h("div", { class: "meter-fill" });
   const meterLabel = h("div", { class: "meter-label muted small" }, "");
   const status = h("p", { class: "status muted small", role: "status" },
-    parent.baseline.median_wpm
+    kind === "word" ? `Say ${what} once, clearly. The result is what the recognizer heard, with its confidence.`
+    : parent.baseline.median_wpm
       ? `Say ${what} once. It is judged against this take's median of ${parent.baseline.median_wpm.toFixed(0)} wpm.`
       : `Say ${what} once. This take has no median, so rates cannot be compared; pauses still are.`);
   const runPanel = h("div", { class: "run-panel" });
@@ -42,6 +63,7 @@ function openDrill(parent: Analysis, kind: "line" | "section", index: number, wh
     h("div", { class: "drill-head" }, h("strong", {}, `Drill: ${what}`), h("span", { class: "spacer" }),
       h("button", { class: "ghost-btn small", type: "button", onClick: stopDrill }, "Close")),
     status,
+    kind === "line" ? hearInline(parent, index) : null,
     h("div", { class: "drill-controls" }, recBtn, h("label", { class: "small muted" }, "or upload ", fileInput)),
     h("div", { class: "meter" }, h("div", { class: "meter-track" }, h("div", { class: "meter-baseline" }), meterBar), meterLabel),
     runPanel, result);
@@ -57,7 +79,7 @@ function openDrill(parent: Analysis, kind: "line" | "section", index: number, wh
       message: state.health?.audio_leaves_machine
         ? "Transcribing with the configured cloud service…"
         : `Transcribing on this computer (${state.health?.stt.model ?? "local model"})…`,
-      start: () => api.startDrillJob(parent.take_id, blob, filename, kind, index, settings),
+      start: () => api.startDrillJob(parent.take_id, blob, filename, kind, index, settings, word),
       retry: (id) => api.startRetryJob(id, { settings }),
       open: (d) => showResult(d),
       goToReport: () => undefined,  // the result stays here, under the line
@@ -93,6 +115,7 @@ function openDrill(parent: Analysis, kind: "line" | "section", index: number, wh
     }
     stopSegment();
     player().pause();  // the playback must not end up in the recording
+    stopAll();
     recBtn.disabled = true;  // one recorder at a time, even if the microphone prompt is slow
     const rec = new Recorder();
     try {

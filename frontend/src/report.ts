@@ -1,13 +1,15 @@
 import { api } from "./api";
 import { clear, fmtTime, h } from "./dom";
-import { drillButton, stopDrill } from "./drill";
+import { drillButton, openDrill, stopDrill } from "./drill";
+import { closeHear, hearButton, sayWord } from "./hearit";
+import { parseScript, sayings } from "./scriptinfo";
 import { describeOverrides } from "./editor";
 import { play as playAt, player } from "./player";
 import { state } from "./state";
 import { glyphParts, statusChip, statusGlyph, statusTone } from "./status";
 import { exampleButton, exportReport } from "./takes";
 import { timelineStrip } from "./timeline";
-import type { Analysis, DefineRow, KeyInfo, LineRow, PauseRow, SectionRow } from "./types";
+import type { Analysis, ClarityWord, DefineRow, KeyInfo, LineRow, PauseRow, SectionRow } from "./types";
 
 const DIFF_KEY = "taketwo.report.diff";
 
@@ -79,6 +81,7 @@ function lineEl(a: Analysis, line: LineRow, diff: boolean): HTMLElement {
   const parts: (HTMLElement | string)[] = [];
   if (line.is_key && line.key) parts.push(statusChip(line.key.status, "KEY", { tip: keyTip(line.key), extraClass: "key" }));
   if (line.is_key && canDrill(a)) parts.push(drillButton(a, "line", line.index, `line ${line.index + 1}`, () => el));
+  if (line.is_key && a.kind !== "drill") parts.push(hearButton(hearOpts(a, line.index, () => el), () => el));
   for (const d of defines) parts.push(defineChip(d));
   const pauseAt = (wi: number) => pauses.filter((p) => p.word_index === wi);
   const adlib = (x: { text: string; start: number; repeat: boolean }) => h("span", { class: "adlib", "data-start": String(x.start),
@@ -126,6 +129,58 @@ function lineEl(a: Analysis, line: LineRow, diff: boolean): HTMLElement {
     play(start);
   });
   return el;
+}
+
+/** Hear it for a line of this take: its own script and median; Try it opens that line's drill. Accepting the coach's
+ *  marks writes them into the Script tab's script only when that script is this take's script. */
+function hearOpts(a: Analysis, lineIndex: number, anchor: () => HTMLElement) {
+  const same = () => {
+    const mine = parseScript(state.scriptText).lines;
+    return mine.length === a.lines.length && mine.every((l, i) => l.parts.filter((p) => p.kind === "word").length === a.lines[i].word_count);
+  };
+  return {
+    lineIndex, script: () => null, takeId: a.take_id,
+    tryIt: canDrill(a) ? () => openDrill(a, "line", lineIndex, `line ${lineIndex + 1}`, anchor()) : "A try is judged against one of your own full takes; the example is a synthetic voice.",
+    onScriptChange: same() ? (text: string) => state.setScript(text) : undefined,
+  };
+}
+
+/** Words the recognizer was unsure of, or heard as another word: measured, with what to do about each. */
+function clarityCard(a: Analysis): HTMLElement | null {
+  const c = a.clarity;
+  if (!c || a.kind === "drill") return null;
+  const list = h("ul", { class: "clarity-list" });
+  const status = h("p", { class: "small muted", role: "status" });
+  const row = (w: ClarityWord): HTMLElement => {
+    let li: HTMLElement = h("li");
+    const resp = sayings(state.scriptText).get(w.word.toLowerCase()) ?? null;
+    li = h("li", {},
+      h("button", { class: "linklike", type: "button", title: "Hear this moment of your take", onClick: () => play(w.start) }, fmtTime(w.start)),
+      " ", w.text, " ",
+      h("button", { class: "ghost-btn small", type: "button", title: resp ? `Said as ${resp} (your [SAY] mark), slowly, then at an ordinary pace` : "The word said slowly, then at an ordinary pace",
+        onClick: () => sayWord(w.word, resp, (m) => { status.textContent = m; }) }, "Hear it"),
+      canDrill(a) ? drillButton(a, "word", w.line, `“${w.word}”`, () => li, w.word_index, "Drill this word") : null,
+      h("button", { class: "linklike small", type: "button", title: "Leave this word out of later reports",
+        onClick: async () => {
+          try {
+            await api.dismissClarity(w.word);
+            li.replaceChildren(h("span", { class: "muted small" }, `“${w.word}”: you said it fine. It is left out from now on. `),
+              h("button", { class: "linklike small", type: "button", onClick: async () => { await api.dismissClarity(w.word, false); li.replaceWith(row(w)); } }, "Undo"));
+          } catch (err) {
+            status.textContent = `Could not save that: ${(err as Error).message}`;
+          }
+        } }, "I said it fine"));
+    return li;
+  };
+  if (c.words.length) list.append(...c.words.map(row));
+  return h("section", { class: "card clarity" },
+    h("h3", {}, "Words that may not have been clear"),
+    c.words.length ? list : h("p", {}, "The recognizer was sure of every script word it matched in this take."),
+    h("p", { class: "muted small" }, `Listed: script words the recognizer heard as another word, or was less than ${c.threshold} confident of`
+      + (c.context_words ? ` (unless the ${c.context_words} words on each side matched at high confidence)` : "") + ". "
+      + c.note + (c.dismissed_skipped ? ` ${c.dismissed_skipped} word${c.dismissed_skipped === 1 ? "" : "s"} you said were fine ${c.dismissed_skipped === 1 ? "is" : "are"} left out.` : "")
+      + " The threshold is in Settings."),
+    status);
 }
 
 /** Drills record one line or section of one of your own full script takes. */
@@ -246,6 +301,7 @@ function transcriptCard(a: Analysis): HTMLElement {
 
 export function renderReport(root: HTMLElement): void {
   stopDrill();  // a redraw would orphan a drill recording in progress
+  closeHear();
   clear(root);
   const a = state.analysis;
   if (!a) {
@@ -321,6 +377,7 @@ export function renderReport(root: HTMLElement): void {
     focusCard(a) ?? "",
     h("section", { class: "card" }, h("h3", {}, "Sections: budget vs. spoken"), sectionBars(a)),
     conventionsCard(a) ?? "",
+    clarityCard(a) ?? "",
     legend,
     diffLegend ?? "",
     scriptEl,

@@ -29,8 +29,17 @@ const KEY_RE = /^\s*\[KEY\]\s*/i;
 const DEFINE_RE = /\[DEFINE:\s*[^\]]+?\s*\]/gi;
 const DEFINE_SPLIT_RE = /(\[DEFINE:\s*[^\]]+?\s*\])/i;
 const EMPH_RE = /^\*([^\s*]+)\*([^\w\s*]*)$/;
+/** [SAY: word = respelling | ipa]: how the speaker says a word. Removed before anything is counted or shown. */
+export const SAY_RE = /\[SAY:\s*([^\]=|]+?)\s*=\s*([^\]|]+?)\s*(?:\|\s*([^\]]+?)\s*)?\]/gi;
 // The line breaks Python's str.splitlines() recognizes, so line numbers match the server's.
 const LINE_BREAK_RE = new RegExp(`\\r\\n|[\\n\\r\\v\\f\\x1c-\\x1e${String.fromCharCode(0x85, 0x2028, 0x2029)}]`);
+
+/** {lower-cased word: respelling} from the script's [SAY] marks. */
+export function sayings(text: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const m of blankComments(text).matchAll(SAY_RE)) out.set(m[1].trim().toLowerCase(), m[2].trim());
+  return out;
+}
 
 export function isSectionHeader(line: string): boolean {
   return line.trimStart().startsWith("##") && SECTION_RE.test(line);
@@ -45,6 +54,7 @@ export function stripLineMarks(line: string): string {
   return line
     .replace(KEY_RE, "")
     .replace(DEFINE_RE, " ")
+    .replace(SAY_RE, " ")
     .replace(/<!--.*?-->/g, "")
     .split(/\s+/)
     .filter((w) => w && w !== "/" && w !== "//")
@@ -54,7 +64,7 @@ export function stripLineMarks(line: string): string {
 
 function lineParts(raw: string): { isKey: boolean; parts: Part[] } {
   const isKey = KEY_RE.test(raw);
-  const body = isKey ? raw.replace(KEY_RE, "") : raw;
+  const body = (isKey ? raw.replace(KEY_RE, "") : raw).replace(SAY_RE, " ");
   const parts: Part[] = [];
   for (const seg of body.split(DEFINE_SPLIT_RE)) {
     const d = /^\[DEFINE:\s*([^\]]+?)\s*\]$/i.exec(seg);

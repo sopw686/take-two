@@ -1,4 +1,4 @@
-import type { Analysis, CompareResult, Health, ImprovAnalysis, JobStatus, Question, QuestionsResponse, ScriptSettings, Settings, SuggestResponse, TakeSummary, Topic } from "./types";
+import type { Analysis, CoachSuggestion, CompareResult, CuePlan, Health, PronounceResponse, ImprovAnalysis, JobStatus, Question, QuestionsResponse, ScriptSettings, Settings, SuggestResponse, TakeSummary, Topic } from "./types";
 
 /** A failed request. takeId is set when the server kept a take folder that can be retried. */
 export class ApiError extends Error {
@@ -115,8 +115,10 @@ export const api = {
       { topic, content: String(content), label, ...(goalS !== null ? { goal_s: String(goalS) } : {}),
         ...(question ? { question: JSON.stringify(question) } : {}) }, settings) }).then((r) => j<JobStatus>(r)),
   improvQuestions: (script: string) => post("/api/improv/questions", { script }).then((r) => j<QuestionsResponse>(r)),
-  startDrillJob: (parentId: string, audio: Blob, filename: string, kind: "line" | "section", index: number, settings: Settings) =>
-    fetch(`/api/jobs/drill/${parentId}`, { method: "POST", body: takeForm(audio, filename, { kind, index: String(index) }, settings) })
+  startDrillJob: (parentId: string, audio: Blob, filename: string, kind: "line" | "section" | "word", index: number, settings: Settings,
+    word: number | null = null) =>
+    fetch(`/api/jobs/drill/${parentId}`, { method: "POST", body: takeForm(audio, filename,
+      { kind, index: String(index), ...(word !== null ? { word: String(word) } : {}) }, settings) })
       .then((r) => j<JobStatus>(r)),
   startRetryJob: (takeId: string, body: { script?: string; settings?: Settings } = {}) =>
     post(`/api/jobs/retry/${takeId}`, body).then((r) => j<JobStatus>(r)),
@@ -128,5 +130,14 @@ export const api = {
     fd.append("file", file, file.name);
     return fetch("/api/import/pptx", { method: "POST", body: fd }).then((r) => j<{ text: string; slides: number }>(r));
   },
+  hear: (script: string | null, lineIndex: number, version: "marked" | "coach", settings: Settings, takeId: string | null = null) =>
+    post("/api/hear", { script, line_index: lineIndex, version, settings, take_id: takeId }).then((r) => j<CuePlan>(r)),
+  hearAccept: (script: string, lineIndex: number, suggestions: CoachSuggestion[]) =>
+    post("/api/hear/accept", { script, line_index: lineIndex, suggestions }).then((r) => j<{ text: string; applied: number }>(r)),
+  pronounce: (script: string) => post("/api/pronounce", { script }).then((r) => j<PronounceResponse>(r)),
+  confirmSaying: (script: string, word: string, respelling: string, ipa: string | null) =>
+    post("/api/pronounce/confirm", { script, word, respelling, ipa }).then((r) => j<{ text: string }>(r)),
+  dismissClarity: (word: string, dismissed = true) =>
+    post("/api/clarity/dismissed", { word, dismissed }).then((r) => j<{ words: string[] }>(r)),
   compare: (takeId: string) => fetch(`/api/compare?take_id=${encodeURIComponent(takeId)}`).then((r) => j<CompareResult>(r)),
 };

@@ -1,10 +1,12 @@
 import { api } from "./api";
 import { clear, esc, h } from "./dom";
-import { isSectionHeader, sections, wordCount } from "./scriptinfo";
+import { openDrill } from "./drill";
+import { hearButton, sayWord } from "./hearit";
+import { isSectionHeader, parseScript, sections, wordCount } from "./scriptinfo";
 import { state } from "./state";
 import { openSuggest } from "./suggest";
 import { scriptTour, type Tour } from "./tour";
-import type { Settings } from "./types";
+import type { PronounceWord, Settings } from "./types";
 
 const CHEATSHEET: [string, string][] = [
   ["<!-- take-two: short_pause_s=0.9 -->", "first line only: thresholds for this script, over the Settings dialog"],
@@ -14,6 +16,7 @@ const CHEATSHEET: [string, string][] = [
   ["word // word", "long pause (target ≥ 1.5 s)"],
   ["[DEFINE: term]", "a term your audience may not know (technical word, in-joke, reference): explain it aloud at or before its first use"],
   ["*word*", "emphasis (experimental)"],
+  ["[SAY: word = KOH-ral]", "how you say a word, for Hear it (not checked in the report)"],
 ];
 
 export const SETTINGS_LINE = /^\s*<!--\s*(?:take-two|taketwo|marked)\s*:/i;
@@ -41,6 +44,7 @@ function highlightLine(line: string): string {
   }
   // [DEFINE: multi word term] spans whitespace; colour it after the fact.
   out = out.replace(/\[DEFINE:\s*([^\]]+?)\s*\]/gi, (m) => `<span class="hl-define">${m}</span>`);
+  out = out.replace(/\[SAY:[^\]]*\]/gi, (m) => `<span class="hl-say">${m}</span>`);
   return out;
 }
 
@@ -150,6 +154,16 @@ export function renderEditor(root: HTMLElement): void {
     }
   });
 
+  const setText = (text: string) => {
+    ta.value = text;
+    state.setScript(text);
+    refresh();
+    hearLines.refresh();
+  };
+  const hearLines = hearYourLines(() => ta.value, setText);
+  const wordsPanel = wordsWorthChecking(() => ta.value, setText);
+  ta.addEventListener("input", () => hearLines.refresh());
+
   const suggestBtn = h("button", { class: "primary", type: "button", onClick: () => openSuggest(root, ta.value, () => renderEditor(root)) }, "Suggest marks…");
   const llm = state.health?.llm;
   const suggestNote = h("p", { class: "muted small" },
@@ -174,6 +188,8 @@ export function renderEditor(root: HTMLElement): void {
         stats,
         settingsNote,
         suggestNote,
+        hearLines.el,
+        wordsPanel.el,
       ),
       h("aside", { class: "cheatsheet" },
         tour.el,
@@ -185,6 +201,80 @@ export function renderEditor(root: HTMLElement): void {
       ),
     ),
   );
+}
+
+/** Every script line with a Hear it button: the marks you wrote, said by a synthetic voice, or the coach's way. */
+function hearYourLines(text: () => string, setText: (t: string) => void): { el: HTMLElement; refresh: () => void } {
+  const body = h("div", { class: "hear-lines-body" });
+  const el = h("details", { class: "card hear-lines" },
+    h("summary", {}, "Hear your lines ", h("small", { class: "muted" }, "a synthetic voice says a line the way you marked it, or the coach's way")), body);
+  let timer = 0;
+  let shown = "";
+  const build = () => {
+    const t = text();
+    if (!el.open || t === shown) return;
+    shown = t;
+    const parsed = parseScript(t);
+    const take = state.analysis && (state.analysis.kind ?? "take") === "take" ? state.analysis : null;
+    // Try it records a drill of the line, judged against a full take of this same script.
+    const same = !!take && take.lines.length === parsed.lines.length
+      && parsed.lines.every((l, i) => l.words === take.lines[i].word_count);
+    body.replaceChildren(...(parsed.lines.length ? parsed.lines.map((ln) => {
+      let row: HTMLElement = h("div");
+      const words = ln.parts.map((p) => (p.kind === "word" ? p.text : p.kind === "pause" ? (p.long ? "//" : "/") : "")).filter(Boolean).join(" ");
+      row = h("div", { class: `hear-line${ln.isKey ? " is-key" : ""}` },
+        h("span", { class: "muted small" }, `${ln.index + 1}`), " ", ln.isKey ? h("code", {}, "KEY") : "", " ", words, " ",
+        hearButton({ lineIndex: ln.index, script: text, takeId: same && take ? take.take_id : null,
+          tryIt: same && take ? () => openDrill(take, "line", ln.index, `line ${ln.index + 1}`, row)
+            : "Record a full take of this script first: a try is judged against that take's median.",
+          onScriptChange: setText }, () => row));
+      return row;
+    }) : [h("p", { class: "muted small" }, "No script lines yet.")]));
+  };
+  el.addEventListener("toggle", build);
+  return { el, refresh: () => { window.clearTimeout(timer); timer = window.setTimeout(build, 400); } };
+}
+
+/** Names, loanwords, acronyms and rare words, with a proposed pronunciation to confirm (with a key) or type. */
+function wordsWorthChecking(text: () => string, setText: (t: string) => void): { el: HTMLElement } {
+  const body = h("div", {});
+  const status = h("p", { class: "small muted", role: "status" });
+  const find = h("button", { class: "ghost-btn small", type: "button" }, "Find words worth checking") as HTMLButtonElement;
+  const row = (w: PronounceWord): HTMLElement => {
+    const inp = h("input", { type: "text", class: "label-input", value: w.respelling ?? "", placeholder: "how you say it, e.g. KOH-ral",
+      "aria-label": `How you say ${w.word}`, style: "width:11em" }) as HTMLInputElement;
+    const say = h("button", { class: "ghost-btn small", type: "button", onClick: () => sayWord(w.word, inp.value.trim() || null, (m) => { status.textContent = m; }) }, "Hear it slowly");
+    const ok = h("button", { class: "ghost-btn small", type: "button", onClick: async () => {
+      try {
+        setText((await api.confirmSaying(text(), w.word, inp.value.trim(), w.ipa)).text);
+        status.textContent = `Saved as [SAY: ${w.word} = ${inp.value.trim()}] in your script. Hear it uses it; the report does not check pronunciation.`;
+      } catch (err) {
+        status.textContent = `Not saved: ${(err as Error).message}`;
+      }
+    } }, w.confirmed ? "Update" : "Confirm");
+    return h("li", {}, h("strong", {}, w.word), h("span", { class: "muted small" }, ` ${w.reasons.join(", ")}${w.count > 1 ? `, ${w.count}×` : ""} `),
+      inp, w.ipa ? h("span", { class: "muted small" }, ` /${w.ipa}/ `) : " ", say, ok,
+      w.source ? h("div", { class: "small muted" }, w.confirmed ? w.source : `Proposed pronunciation: confirm it. ${w.source.replace(/: confirm it$/, "")}.`) : null);
+  };
+  find.addEventListener("click", async () => {
+    find.disabled = true;
+    status.textContent = "Reading the script…";
+    try {
+      const r = await api.pronounce(text());
+      status.textContent = "";
+      body.replaceChildren(
+        r.words.length ? h("ul", { class: "words-list" }, ...r.words.map(row)) : h("p", { class: "small muted" }, "Nothing flagged: no names, acronyms, loanwords or rare words found."),
+        r.reason ? h("p", { class: "small muted" }, r.reason) : h("p", { class: "small muted" }, "A model can be wrong about names, and names vary by person and place. You know how yours are said: edit before you confirm."),
+        r.note ? h("p", { class: "small muted" }, r.note) : "",
+        r.dropped.length ? h("p", { class: "small muted" }, `Dropped by code: ${r.dropped.map((d) => `${d.count} ${d.reason}`).join("; ")}.`) : "");
+    } catch (err) {
+      status.textContent = `Failed: ${(err as Error).message}`;
+    }
+    find.disabled = false;
+  });
+  return { el: h("details", { class: "card words-check" },
+    h("summary", {}, "Words worth checking ", h("small", { class: "muted" }, "names, loanwords, acronyms, rare words: how you say them")),
+    h("p", {}, find), body, status) };
 }
 
 /** "short_pause_s 0.9, conventions_enabled on" */

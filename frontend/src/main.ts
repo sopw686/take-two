@@ -1,6 +1,8 @@
 import "./styles.css";
 import { api, ApiError } from "./api";
 import { stopDrill } from "./drill";
+import { closeHear } from "./hearit";
+import { stopAll } from "./speaker";
 import { stopSegment } from "./player";
 import { h } from "./dom";
 import { renderEditor } from "./editor";
@@ -34,6 +36,8 @@ function render(): void {
   if (tab !== "rehearse") stopRehearsal();
   if (tab !== "improvise") stopImprovise();
   stopDrill();
+  closeHear();
+  stopAll();
   stopSegment();
   const p = document.getElementById("player") as HTMLAudioElement;
   p.pause();
@@ -62,6 +66,9 @@ async function boot(): Promise<void> {
       state.health.llm.available
         ? h("span", { class: "muted" }, ` Suggestions use ${state.health.llm.provider}; it only ever sees script text and measured numbers, never audio.`)
         : h("span", { class: "muted" }, " No LLM key configured: suggestions are off, everything else works."),
+      state.health.tts?.sends
+        ? h("span", { class: "warn" }, ` Hear it can use ${state.health.tts.label}, which sends ${state.health.tts.sends}, only if you pick that voice; the default is your browser's voice.`)
+        : "",
     );
   } catch (err) {
     privacy.replaceChildren(h("span", { class: "warn" }, `Cannot reach the Take Two server: ${(err as Error).message}`));

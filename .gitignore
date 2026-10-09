@@ -10,3 +10,5 @@ takes/*
 *.egg-info/
 .devtakes/
 .claude/worktrees/
+
+frontend/.test-build/

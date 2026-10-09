@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 
 from take_two import takes
 from take_two.llm import get_llm
-from take_two.marks import (DEFINE_RE, KEY_RE, PAUSE_RE, Script, format_budget, is_section_header,
+from take_two.marks import (DEFINE_RE, KEY_RE, PAUSE_RE, SAY_RE, Script, format_budget, is_section_header,
                           normalize_word, parse_script)
 
 router = APIRouter(prefix="/api/suggest")
@@ -238,12 +238,14 @@ def _row(script: Script, type_: str, line_index: int, word_index: int | None, te
 
 # ---- applying accepted suggestions to the raw text ---------------------------------
 
-def line_components(raw: str) -> tuple[bool, list[str], dict[int, str], list[str]]:
-    """(is_key, raw words incl. *emphasis*, pauses {word_index: kind}, define terms)."""
+def line_components(raw: str) -> tuple[bool, list[str], dict[int, str], list[str], list[str]]:
+    """(is_key, raw words incl. *emphasis*, pauses {word_index: kind}, define terms, [SAY] marks as written)."""
     is_key = bool(KEY_RE.match(raw))
     s = KEY_RE.sub("", raw, count=1) if is_key else raw
     terms = [m.group("term").strip() for m in DEFINE_RE.finditer(s)]
     s = DEFINE_RE.sub(" ", s)
+    says = [m.group(0) for m in SAY_RE.finditer(s)]
+    s = SAY_RE.sub(" ", s)
     words: list[str] = []
     pauses: dict[int, str] = {}
     for piece in s.split():
@@ -253,10 +255,10 @@ def line_components(raw: str) -> tuple[bool, list[str], dict[int, str], list[str
             pauses[len(words)] = "//" if "//" in (k, pauses.get(len(words), "")) else "/"
             continue
         words.append(piece)
-    return is_key, words, pauses, terms
+    return is_key, words, pauses, terms, says
 
 
-def rebuild_line(is_key: bool, words: list[str], pauses: dict[int, str], terms: list[str]) -> str:
+def rebuild_line(is_key: bool, words: list[str], pauses: dict[int, str], terms: list[str], says: list[str] = ()) -> str:
     parts: list[str] = []
     for i, w in enumerate(words):
         if i in pauses:
@@ -266,15 +268,21 @@ def rebuild_line(is_key: bool, words: list[str], pauses: dict[int, str], terms: 
         parts.append(pauses[len(words)])
     body = " ".join(parts)
     defs = " ".join(f"[DEFINE: {t}]" for t in terms)
-    line = ("[KEY] " if is_key else "") + (defs + " " if defs else "") + body
+    line = ("[KEY] " if is_key else "") + (defs + " " if defs else "") + body + "".join(" " + s for s in says)
     return line.strip()
 
 
 def apply_to_line(raw: str, accepted: list[dict]) -> str:
-    is_key, words, pauses, terms = line_components(raw)
+    is_key, words, pauses, terms, says = line_components(raw)
     for a in accepted:
         if a["type"] == "key":
             is_key = True
+        elif a["type"] == "emphasis":
+            wi = int(a["word_index"] or 0)
+            if 0 <= wi < len(words) and not words[wi].startswith("*"):
+                m = re.match(r"^(.*?)([^\w*]*)$", words[wi])  # *word*, trailing punctuation outside
+                if m and m.group(1):
+                    words[wi] = f"*{m.group(1)}*{m.group(2)}"
         elif a["type"] in ("pause", "long_pause"):
             wi = int(a["word_index"] or 0)
             wi = max(0, min(wi, len(words)))
@@ -284,7 +292,7 @@ def apply_to_line(raw: str, accepted: list[dict]) -> str:
         elif a["type"] == "define" and a.get("term"):
             if a["term"].lower() not in [t.lower() for t in terms]:
                 terms.append(a["term"])
-    return rebuild_line(is_key, words, pauses, terms)
+    return rebuild_line(is_key, words, pauses, terms, says)
 
 
 def apply_marks(script_text: str, accepted: list[dict]) -> str:

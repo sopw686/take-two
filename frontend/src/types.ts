@@ -31,14 +31,52 @@ export interface Settings {
   improv_pitch_range_st: number;
   improv_loudness_var_db: number;
   improv_pace_var_pct: number;
+  hear_baseline_wpm: number;
+  hear_register: "none" | "technical" | "celebratory" | "slam" | "pitch";
+  coach_slow_pct: number;
+  coach_pause_s: number;
+  clarity_prob: number;
+  clarity_context_words: number;
 }
 
 export interface Health {
   stt: { backend: string; model: string; device: string; loaded: boolean; local: boolean };
   audio_leaves_machine: boolean;
   llm: { available: boolean; provider: string; model: string | null; reason: string | null };
+  tts?: TtsStatus;
   defaults: Settings;
 }
+
+/** The optional server voice for Hear it; the browser's own voice needs nothing from the server. */
+export interface TtsStatus { kind: "azure" | "fake" | null; available: boolean; label: string | null; sends: string | null; reason: string | null }
+
+/** One stretch of a line the voice says the same way, then the pause after it. */
+export interface CueSegment {
+  text: string; say_as: string | null; ipa: string | null;
+  rate: number; wpm: number; pitch_st: number; volume_db: number;
+  contour: "rise" | "fall" | "hold" | "none"; stress: boolean; slow_word: boolean;
+  pause_after_s: number; source: string; sources: string[]; checked: boolean;
+}
+export interface Cue { text: string; source: string; checked: boolean; label: string }
+export interface CoachSuggestion {
+  id: number; kind: string; text: string; source: string; checked: boolean; label: string; reason: string; cue: string;
+  accept?: { type: string; word_index?: number; word_indexes?: number[] } | null;
+}
+export interface CuePlan {
+  version: "marked" | "coach"; line_index: number; text: string; is_key: boolean;
+  reference_wpm: number; reference_source: string; lead_pause_s: number;
+  segments: CueSegment[]; cues: Cue[]; notes: string[];
+  provider: { kind: string; label: string; reason?: string }; register: string | null;
+  available: boolean; reason: string | null;
+  suggestions?: CoachSuggestion[]; dropped?: { reason: string; count: number }[];
+}
+export interface PronounceWord {
+  word: string; key: string; line: number; reasons: string[]; count: number;
+  respelling: string | null; ipa: string | null; source: string | null; confirmed: boolean;
+}
+export interface PronounceResponse { words: PronounceWord[]; note: string | null; dropped: { reason: string; count: number }[]; provider: string | null; reason: string | null }
+export interface ClarityWord { line: number; word_index: number; word: string; key: string; start: number; end: number; prob: number; heard: string | null; kind: "heard" | "unsure"; text: string }
+export interface ClarityReport { threshold: number; context_words: number; words: ClarityWord[]; dismissed_skipped: number; note: string }
 
 export type Status = "met" | "near" | "diverged" | "short" | "missing" | "unmeasurable" | "not_found" | "over" | "under" | "no_budget" | "no_lines" | "ok" | "unknown";
 
@@ -139,7 +177,7 @@ export interface Analysis {
   kind?: "take" | "drill" | "example";
   example?: string;
   drill_of?: string;
-  drill?: { kind: "line" | "section"; index: number; line_start: number; line_end: number; what: string; parent_median_wpm: number | null };
+  drill?: { kind: "line" | "section" | "word"; index: number; line_start: number; line_end: number; what: string; parent_median_wpm: number | null; word?: string; word_index?: number };
   drill_summary?: string[];
   duration_s: number;
   settings: Settings;
@@ -163,6 +201,7 @@ export interface Analysis {
   conventions?: ConventionsReport;
   emphasis?: EmphasisRow[];
   coaching?: CoachingReport;
+  clarity?: ClarityReport;
 }
 
 export interface ConventionsReport {

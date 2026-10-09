@@ -36,7 +36,27 @@ const IMPROV_FIELDS: Field[] = [
   { key: "improv_pace_var_pct", label: "Pace variation, at least (%)", step: 1, min: 0, max: 100, help: "How much your words per minute change across 15-second stretches." },
 ];
 
-const INTEGER = new Set(["baseline_min_words", "fuzzy_min_chars"]);
+const HEAR_FIELDS: Field[] = [
+  { key: "hear_baseline_wpm", label: "Baseline pace before your first take (wpm)", step: 5, min: 80, max: 250, help: "Used only until you have a take of your own, and labelled as a baseline, never as your rate." },
+  { key: "coach_slow_pct", label: "How much slower a slowed word is (%)", step: 5, min: 5, max: 60, help: "When the coach slows a word or phrase down." },
+  { key: "coach_pause_s", label: "A pause the coach adds (s)", step: 0.1, min: 0.1, max: 3, help: "Never shorter than a pause you wrote: the coach only adds." },
+];
+
+const CLARITY_FIELDS: Field[] = [
+  { key: "clarity_prob", label: "“May not have been clear” below recognizer confidence", step: 0.05, min: 0.05, max: 0.95, help: "Per-word confidence from the recognizer, plus words it heard as another word." },
+  { key: "clarity_context_words", label: "Skip a word whose neighbours were all clear, this many on each side", step: 1, min: 0, max: 5, help: "A low-confidence word the recognizer still got right, between confidently matched words. 0 lists every one." },
+];
+
+/** Registers: a starting point you pick for the coach, off until you do. Never used to judge a take. */
+export const REGISTERS: { id: Settings["hear_register"]; label: string; rules: string }[] = [
+  { id: "none", label: "None (off)", rules: "No register: with an API key the coach decides from the line alone; without one, the coach's version is off." },
+  { id: "technical", label: "Conversational / technical talk", rules: "Phrases of about 3–5 seconds; slow down for numbers, definitions and the main result; pause before and after the point; one or two stressed words per sentence at most; a falling end on statements." },
+  { id: "celebratory", label: "Celebratory (toast, tribute)", rules: "Warmth over speed, slightly slower overall; a pause after the punchline for the room to react; lower and slower for the sincere line; the last line slowest, a clear falling end, then silence." },
+  { id: "slam", label: "Performance poetry / slam", rules: "The line break is a breath; build pace and volume toward the turn, drop just before it; contrast; end lines on a held or falling note; the last line gets the longest pause." },
+  { id: "pitch", label: "Pitch / interview", rules: "Lead with the claim; slow down on the number and the ask; no trailing off." },
+];
+
+const INTEGER = new Set(["baseline_min_words", "fuzzy_min_chars", "clarity_context_words"]);
 
 export function openSettings(onChange: () => void): void {
   const cur = state.effectiveSettings();
@@ -55,6 +75,12 @@ export function openSettings(onChange: () => void): void {
   const iwMax = h("input", { type: "number", step: "5", min: "40", max: "400", value: String(cur.improv_wpm_max) }) as HTMLInputElement;
   const emph = h("input", { type: "checkbox" }) as HTMLInputElement;
   emph.checked = cur.emphasis_enabled;
+  const register = h("select", { class: "label-input" }, ...REGISTERS.map((r) => h("option", { value: r.id }, r.label))) as HTMLSelectElement;
+  register.value = cur.hear_register ?? "none";
+  const registerRules = h("small", { class: "muted" });
+  const showRules = () => { registerRules.textContent = REGISTERS.find((r) => r.id === register.value)?.rules ?? ""; };
+  register.addEventListener("change", showRules);
+  showRules();
 
   const dlg = h("dialog", { class: "settings-dialog" }) as HTMLDialogElement;
   // A blank or out-of-range field must not reach the server: NaN serializes to null and every take would fail.
@@ -75,6 +101,7 @@ export function openSettings(onChange: () => void): void {
     next.conventions_wpm_max = Math.max(lo, hi);
     next.conventions_filler_per_100 = num(filler, cur.conventions_filler_per_100);
     next.emphasis_enabled = emph.checked;
+    next.hear_register = register.value as Settings["hear_register"];
     const ilo = num(iwMin, cur.improv_wpm_min);
     const ihi = num(iwMax, cur.improv_wpm_max);
     next.improv_wpm_min = Math.min(ilo, ihi);
@@ -99,6 +126,12 @@ export function openSettings(onChange: () => void): void {
       h("label", { class: "setting", "data-setting": "conventions_wpm_max" }, h("span", {}, "Pace band max (wpm)"), wpmMax),
       h("label", { class: "setting", "data-setting": "conventions_filler_per_100" }, h("span", {}, "Fillers per 100 words, at most"), filler)),
     h("label", { class: "setting check", "data-setting": "emphasis_enabled" }, emph, h("span", {}, "Emphasis check for *word* (experimental)", h("small", { class: "muted" }, "Compares a word's loudness and pitch with the rest of its line. Unreliable on quiet microphones."))),
+    h("h3", {}, "Hear it"),
+    h("p", { class: "muted small" }, "A synthetic voice demonstrates a line: as you marked it (your marks and the thresholds above), or the coach's way. A register tells the coach what landing it means for this speech. It is a starting point you choose, off until you pick one, and never used to judge a take."),
+    h("label", { class: "setting", "data-setting": "hear_register" }, h("span", {}, "Register for the coach", registerRules), register),
+    h("div", { class: "settings-grid" }, ...HEAR_FIELDS.map(row)),
+    h("h3", {}, "Words that may not have been clear"),
+    h("div", { class: "settings-grid" }, ...CLARITY_FIELDS.map(row)),
     h("h3", {}, "Improvise reference bands"),
     h("p", { class: "muted small" }, "Improvise has no marks, so it compares each take with these bands. They are starting points, not rules; set them to what you are practising for."),
     h("div", { class: "settings-grid" },

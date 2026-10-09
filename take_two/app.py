@@ -73,10 +73,12 @@ def _parse_settings(raw: str | None) -> Settings:
 @app.get("/api/health")
 async def health() -> dict:
     from take_two.llm import llm_status
+    from take_two.tts import status as tts_status
     return {
         "stt": get_transcriber().describe(),
         "audio_leaves_machine": audio_leaves_machine(),
         "llm": llm_status(),
+        "tts": tts_status(),
         "defaults": Settings().model_dump(),
     }
 
@@ -307,7 +309,8 @@ async def outcomes_csv() -> Response:
                     headers={"Content-Disposition": 'attachment; filename="take-two-outcomes.csv"'})
 
 
-async def _new_drill(parent_id: str, audio: UploadFile, kind: str, index: int, settings: str | None) -> tuple[str, Settings]:
+async def _new_drill(parent_id: str, audio: UploadFile, kind: str, index: int, settings: str | None,
+                     word: int | None = None) -> tuple[str, Settings]:
     tdir = _take_dir(parent_id)
     st = _parse_settings(settings)
     if (tdir / "script.md").exists():
@@ -316,16 +319,16 @@ async def _new_drill(parent_id: str, audio: UploadFile, kind: str, index: int, s
     if not data:
         raise HTTPException(400, "the recording is empty")
     try:
-        return pipeline.create_drill(parent_id, data, audio.filename or "drill.webm", kind, index, st), st
+        return pipeline.create_drill(parent_id, data, audio.filename or "drill.webm", kind, index, st, word), st
     except ValueError as exc:
         raise HTTPException(400, str(exc))
 
 
 @app.post("/api/takes/{take_id}/drill")
 async def create_drill(take_id: str, audio: UploadFile = File(...), kind: str = Form(...), index: int = Form(...),
-                       settings: str | None = Form(None)) -> dict:
-    """Record one line or section of a take's script; its rates are judged against that take's median."""
-    drill_id, st = await _new_drill(take_id, audio, kind, index, settings)
+                       settings: str | None = Form(None), word: int | None = Form(None)) -> dict:
+    """Record one line, section or word of a take's script; rates are judged against that take's median."""
+    drill_id, st = await _new_drill(take_id, audio, kind, index, settings, word)
     return await process(drill_id, st)
 
 
@@ -483,8 +486,8 @@ async def retry_job(take_id: str, body: RetryBody | None = None) -> dict:
 
 @app.post("/api/jobs/drill/{take_id}")
 async def drill_job(take_id: str, audio: UploadFile = File(...), kind: str = Form(...), index: int = Form(...),
-                    settings: str | None = Form(None)) -> dict:
-    drill_id, st = await _new_drill(take_id, audio, kind, index, settings)
+                    settings: str | None = Form(None), word: int | None = Form(None)) -> dict:
+    drill_id, st = await _new_drill(take_id, audio, kind, index, settings, word)
     return _start_job(drill_id, st)
 
 
@@ -513,6 +516,10 @@ app.include_router(improv_router)
 from take_two.import_routes import router as import_router  # noqa: E402
 
 app.include_router(import_router)
+
+from take_two.hear_routes import router as hear_router  # noqa: E402
+
+app.include_router(hear_router)
 
 
 # ---- frontend ------------------------------------------------------------------
