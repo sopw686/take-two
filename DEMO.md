@@ -7,13 +7,13 @@
 **Planted divergences.** Deliver the speech well except for these two spots, so the report has something to show:
 
 1. **The irony line.** Rush *"A coach that rewards even pace cannot tell a deliberate pause from dead air."* and go straight into the next section without the `//`. The report will flag the line about missed pauses for a missed pause.
-2. **One skipped pause.** Say *"right now is marked up, and Marked is listening"* without the `/`.
+2. **One skipped pause.** Say *"right now is marked up, and Take Two is listening"* without the `/`.
 
 Leave both `[DEFINE]`s and the last two `[KEY]` lines intact so the report shows greens as well as reds. (Optional third: drop *"which is my own typical pace in this take"* to make `median` undefined.)
 
 **Run of show (about 3:15).**
 
-- **0:00 to 2:10: perform it.** Rehearse tab, Record, deliver the speech. The planned-section indicator and loudness meter move while you talk. Stop.
+- **0:00 to 2:10: perform it.** Rehearse tab: the speech is on screen as a teleprompter, in large type with its marks drawn (`[KEY]` lines tinted, `/` and `//` as gaps, defined terms underlined). Set the size with A−/A+ before you start (it is remembered). Record and read from the screen. The highlight follows your *plan* (each section's budget spread over its lines), not your voice, so if you get ahead or behind, tap ↓ / Space or ↑ (a presentation clicker's page keys work too) and it continues from that line. The planned-section line and the loudness meter move while you talk. Stop.
 - **2:10: the report.** *"That was the pitch. Here's how I did against my own marks."* Hover the red `KEY` on the irony line: *"Faster than my own median, and no pause after it. That's the one line I wrote about pauses."* Click it so it plays back.
 - **2:30.** Hover the `/` before "and Take Two is listening": measured silence against the 0.7 s target. Then hover a green `//`: *"met your mark."*
 - **2:45.** Point at the `DEFINE: voice activity detector` chip: defined, with the evidence quote and timestamp. Then the section bars: budget vs. spoken time.
@@ -73,9 +73,9 @@ Hover two reasons, read one aloud, accept it. Reject one. Click **Apply**.
 
 ## 3:15 – Close
 
-Rehearse tab.
+Rehearse tab: the script is on screen as a teleprompter, marks drawn in.
 
-> "Then I rehearse against the marks I chose. Audio stays on this machine; the banner says so. The targets are mine, the conventions are an opt-in preset, and the report tells me where I diverged from my own intent, line by line."
+> "Then I rehearse against the marks I chose, reading from my own marked script. Audio stays on this machine; the banner says so. The targets are mine, the conventions are an opt-in preset, and the report tells me where I diverged from my own intent, line by line."
 
 Stop.
 

@@ -102,4 +102,19 @@ Each entry: what was decided, what else was considered, why.
 
 **A fresh browser opens the newest finished take on disk.** The Report tab used to say "No take yet" whenever localStorage was empty, even with takes on disk. It now falls back to the newest finished real take, then to an example; drills are never picked.
 
-**Recordings live wherever `MARKED_TAKES_DIR` points; the default is not moved.** On this machine the project, and so `takes/`, sits inside OneDrive, which means the sync client uploads recordings. That conflicts with "audio stays on the machine", but moving the default would hide every existing take, so the README now says so and names the variable that keeps audio local.
+**Recordings live wherever `TAKE_TWO_TAKES_DIR` points; the default is not moved.** On this machine the project, and so `takes/`, sits inside OneDrive, which means the sync client uploads recordings. That conflicts with "audio stays on the machine", but moving the default would hide every existing take, so the README now says so and names the variable that keeps audio local.
+
+
+## Teleprompter (M9)
+
+**The highlight follows the plan, never the voice.** Each section's budget is spread across its lines by word count, and the line whose planned window contains the elapsed time is highlighted and scrolled to about a third of the way down. The label says so: "Highlight follows your plan, not your voice." Alternatives: follow the voice with in-browser speech recognition (Chrome sends audio to Google, which breaks "audio stays local", and it is unreliable on technical vocabulary), or a fully local streaming recognizer (a large new piece of work). A plan-based highlight is honest about what it knows and matches the existing planned-section line.
+
+**Keys re-anchor the plan instead of fighting it.** Space, ↓ and → (and PageDown, which presentation clickers send) move the highlight on; ↑, ← and PageUp move it back. The plan then continues from the chosen line at its planned pace, and the label says how far that line is from the plan ("0:12 behind your plan"), in the speaker's own budget's terms. Alternative: snap back to the plan a few seconds after a key press, which would drag the highlight away from where the speaker actually is. The clock and the planned-section line stay on real time.
+
+**Keys work while recording unless focus is in a text field, and both halves of the key press are swallowed.** A focused button acts on Space at keyup, so stopping only keydown would let Space stop the take. The record button also gives up focus when a take starts. Enter still activates a focused Stop button.
+
+**Scrolling by hand pauses the auto-scroll for 4 seconds, then it returns to the current line.** Wheel, touch, pointer and Home/End count as manual; programmatic scrolling cannot be told apart from user scrolling by `scroll` events, so those are not used.
+
+**No budgets, no auto-scroll.** If any section that has lines lacks a budget, the plan is undefined, so the highlight only moves with the keys, and a note says how to turn the plan on. Partial plans were considered and rejected: the lines after an unbudgeted section would have no honest planned time.
+
+**The client mirrors the server's parser exactly.** The teleprompter needs the same lines the report will use, so `scriptinfo.parseScript` blanks comments keeping their newlines, splits lines the way Python's `splitlines()` does, strips `[KEY]`, splits on `[DEFINE: …]` and counts words as `marks.py` does. A `[DEFINE]` term is underlined at its first occurrence in its line; if the term is not in the line, it stays a small chip where the tag was written.

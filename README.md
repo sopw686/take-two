@@ -42,6 +42,10 @@ Everything runs locally by default. Audio never leaves your computer unless you 
 
 All thresholds are yours to change in **Settings**. Wording in the report is "met your mark" / "diverged from your mark"; there is no score.
 
+## Rehearsing
+
+The Rehearse tab shows the script as a **teleprompter**: large type (A−/A+, remembered), `[KEY]` lines tinted, `/` and `//` as visible gaps, defined terms underlined, section headers with their budgets. The highlight follows your plan (each section's budget spread over its lines by word count), not your voice. Space / ↓ and ↑ (or a clicker's page keys) move it when you are ahead or behind, and scrolling by hand pauses the auto-scroll for a few seconds. Without budgets it is manual only. The clock, the planned-section line, the loudness meter, calibration and the upload path sit around it.
+
 ## What the report shows
 
 - A short summary: "2 of 3 key lines met your marks. Methods ran 0:12 over budget. 'Convolution' was never defined."
@@ -90,7 +94,7 @@ examples/         the example take (synthetic voice, script, committed transcrip
 sample_script.md  a placeholder talk to try the marks on
 ```
 
-See `DECISIONS.md` for design choices, `TESTING.md` for what is and is not verified, `DEMO.md` for a demo walkthrough (with `demo_speech.md`, a marked talk about Marked), `PITCH.md` for the pitch outline, and `WRITEUP.md` for the one-page submission write-up.
+See `DECISIONS.md` for design choices, `TESTING.md` for what is and is not verified, `DEMO.md` for a demo walkthrough (with `demo_speech.md`, a marked talk about Take Two), `PITCH.md` for the pitch outline, and `WRITEUP.md` for the one-page submission write-up.
 
 ## Known limitations
 

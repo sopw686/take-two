@@ -2,6 +2,7 @@ import { runAnalysis, unsavedRecordingNote } from "./analysisRun";
 import { api } from "./api";
 import { clear, fmtClock, h } from "./dom";
 import { Meter, extFor, pickMimeType } from "./meter";
+import { createPrompter } from "./prompter";
 import { plannedSectionAt, sections } from "./scriptinfo";
 import { state } from "./state";
 import type { Analysis } from "./types";
@@ -14,6 +15,7 @@ let startedAt = 0;
 let timer = 0;
 let latestDb = -100;
 let paceRec: SpeechRecognitionLike | null = null;
+let viewAbort: AbortController | null = null;
 
 interface SpeechRecognitionLike {
   continuous: boolean; interimResults: boolean; lang: string;
@@ -30,12 +32,15 @@ const CALIBRATION_SENTENCE = "The quick brown fox jumps over the lazy dog, and t
 
 export function renderRehearse(root: HTMLElement, goToReport: () => void): void {
   clear(root);
+  viewAbort?.abort();
+  viewAbort = new AbortController();
   const script = state.scriptText;
   const secs = sections(script);
   if (!script.trim()) {
     root.append(h("p", { class: "muted" }, "Write or load a script first (Script tab)."));
     return;
   }
+  const prompter = createPrompter(script, viewAbort.signal);
 
   const clock = h("div", { class: "clock" }, "0:00");
   const planned = h("div", { class: "planned muted" }, "");
@@ -44,12 +49,13 @@ export function renderRehearse(root: HTMLElement, goToReport: () => void): void 
   const meterWrap = h("div", { class: "meter" }, h("div", { class: "meter-track" }, h("div", { class: "meter-baseline" }), meterBar), meterLabel);
   const status = h("p", { class: "status muted", role: "status" }, "");
   const runPanel = h("div", { class: "run-panel" }, unsavedRecordingNote());
-  const recBtn = h("button", { class: "primary big", type: "button" }, "Start recording") as HTMLButtonElement;
+  const recBtn = h("button", { class: "primary rec-btn", type: "button" }, "Start recording") as HTMLButtonElement;
   const labelInput = h("input", { type: "text", placeholder: "Label this take (optional)", class: "label-input" }) as HTMLInputElement;
 
   const updatePlanned = () => {
     const t = (performance.now() - startedAt) / 1000;
     clock.textContent = fmtClock(t);
+    prompter.tick(t);
     const p = plannedSectionAt(secs, t);
     if (p.section) planned.textContent = `Planned section at this point: ${p.section.name || "Untitled"} (${fmtClock(p.into)} of ${fmtClock(p.total)} budget)`;
     else if (p.total > 0) planned.textContent = `Past the total budget by ${fmtClock(p.into)}`;
@@ -100,12 +106,21 @@ export function renderRehearse(root: HTMLElement, goToReport: () => void): void 
         closeMic();
         stopPace();
         clearInterval(timer);
+        prompter.stop();
+        forgetBtn?.removeAttribute("disabled");
+        settingsBtn()?.removeAttribute("disabled");
         await submit(blob, `take.${extFor(blob.type)}`);
       };
       recorder.start(250);
       startPace();
       startedAt = performance.now();
       timer = window.setInterval(updatePlanned, 200);
+      updatePlanned();
+      prompter.start();
+      recBtn.blur();  // Space moves the teleprompter now; it must not reach the button
+      forgetBtn?.setAttribute("disabled", "");
+      // Saving Settings re-renders the tab, which would orphan the live take.
+      settingsBtn()?.setAttribute("disabled", "");
       recBtn.textContent = "Stop and analyze";
       recBtn.classList.add("recording");
       fileInput.disabled = true;
@@ -259,35 +274,46 @@ export function renderRehearse(root: HTMLElement, goToReport: () => void): void 
     ...secs.map((s) => h("li", {}, h("span", { class: "sec-name" }, s.name || "Untitled"), " ",
       h("span", { class: "muted" }, s.budget_s !== null ? fmtClock(s.budget_s) : "no budget", ` · ${s.words} words`))));
 
+  const forgetBtn = state.calibration ? h("button", { class: "ghost-btn small", type: "button", onClick: () => { state.setCalibration(null); renderRehearse(root, goToReport); } }, "Forget calibration") : null;
+
   root.append(
     h("div", { class: "rehearse-layout" },
       h("div", { class: "rehearse-main" },
-        h("div", { class: "rec-panel" }, clock, planned, recBtn, labelInput, status, runPanel),
+        h("div", { class: "rec-bar" },
+          h("div", { class: "rec-bar-row" }, clock, recBtn, labelInput),
+          planned, status, runPanel),
+        prompter.el,
+      ),
+      h("aside", { class: "rehearse-side" },
         h("div", { class: "meter-panel" }, h("h3", {}, "Loudness"), meterWrap, pacePanel),
+        h("h3", {}, "Sections"),
+        sectionList,
         h("div", { class: "upload-panel" },
           h("h3", {}, "…or upload a recording"),
           h("p", { class: "muted small" }, "Any audio file works (webm, wav, m4a, mp3). Useful for takes recorded on a phone."),
           fileInput),
-      ),
-      h("aside", { class: "rehearse-side" },
-        h("h3", {}, "Sections"),
-        sectionList,
-        h("h3", {}, "Calibration"),
-        h("p", { class: "small" }, "Read this at your normal speaking volume:"),
-        h("blockquote", {}, CALIBRATION_SENTENCE),
-        calibBtn,
-        calibInfo,
-        state.calibration ? h("button", { class: "ghost-btn small", type: "button", onClick: () => { state.setCalibration(null); renderRehearse(root, goToReport); } }, "Forget calibration") : null,
+        h("details", { class: "side-details", open: !state.calibration },
+          h("summary", {}, "Calibration"),
+          h("p", { class: "small" }, "Read this at your normal speaking volume:"),
+          h("blockquote", {}, CALIBRATION_SENTENCE),
+          calibBtn,
+          calibInfo,
+          forgetBtn),
       ),
     ),
   );
 }
 
 export function stopRehearsal(): void {
+  viewAbort?.abort();
+  viewAbort = null;
   if (recorder && recorder.state === "recording") recorder.stop();
   else closeAll();
 }
+const settingsBtn = () => document.getElementById("settings-btn");
+
 function closeAll(): void {
+  settingsBtn()?.removeAttribute("disabled");
   try { paceRec?.stop(); } catch { /* ignore */ }
   paceRec = null;
   meter?.stop();
