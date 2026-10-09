@@ -1,15 +1,31 @@
-# Take Two: a rehearsal coach that checks your talk against your own marks
+# Take Two
 
-**The problem.** Speech coaches (PowerPoint's Speaker Coach, Yoodli, Orai) grade everyone against one standard: even pace, no filler, don't be monotone. But good speakers vary on purpose. They slow down for the key result and pause to let it land, and a coach that rewards even pace penalizes exactly that. It can't tell a deliberate pause from dead air, because it never knew what you meant to do. The failures that actually sink science talks are specific: rushing the sentence that carries the finding, not pausing after it, using jargon without defining it, and letting Methods eat the conclusion.
+Take Two is a rehearsal coach for science talks. You mark up your script with what you're going for (slow down here, pause there, define this term), rehearse out loud, and it shows you where your delivery matched those marks and where it didn't.
 
-**Who it's for.** Students and researchers rehearsing science talks alone, for conference talks, thesis defenses or three-minute-thesis rounds. They are often anxious, often speaking in a second language, and always on a hard time limit. They know what they want the talk to do. They need to know whether they actually did it.
+## The problem
 
-**The idea.** Performers mark their scripts: *slow here, breathe here, hit this word*. Take Two brings that to talks with marks you can learn in a minute: `## Section [0:50]` (time budget), `[KEY]` (slow down, then pause), `/` and `//` (pauses), and `[DEFINE: term]` (explain it aloud before using it). You rehearse out loud. The report is your own script with every mark colored *met*, *close* or *diverged from your mark*, the measured number behind it ("19% faster than your median"), and the audio a click away. There is no score. Novices can ask for suggested marks for a goal, each with a reason, and accept or reject each one.
+Tools like PowerPoint's Speaker Coach and Yoodli compare everyone to the same idea of a good speaker: steady pace, few filler words, varied pitch. They don't know anything about your talk, so they can't tell a deliberate pause after your main result from just losing your place. The mistakes that hurt science talks are usually more specific: rushing the sentence with the finding in it, using jargon nobody knows, or letting methods run long until the conclusion gets squeezed.
 
-**Why voice.** The thing being coached only exists in sound. A transcript erases timing, pauses and stress, so a keyboard can't capture it. The key moment is the rehearsal itself. Your eyes are on the script, your hands are on notes or a clicker, and your attention is taken up by speaking, so you can't also hear your own pace. Take Two is the listener you can't be for yourself. Voice is used only there: marking a script and reading the report are careful, deliberate work, so they stay on keyboard and screen.
+## Who it's for
 
-**How it's built.** A FastAPI backend and a Vite + TypeScript frontend, all running locally. faster-whisper gives word timestamps. A Silero voice-activity detector measures pauses on the raw audio rather than trusting Whisper's gaps. The transcript is aligned to the script by sequence matching, and rates are relative to the speaker's own median line in the same take. Audio stays on the machine by default, and the UI says so. Every threshold is editable and saved with the analysis, and re-analysis reuses the transcript. A synthetic TTS recording with known ground truth (a key line sped up 1.3×, pauses of known length) runs through the real pipeline as a test.
+Grad students and researchers preparing conference talks, thesis defenses, or three-minute-thesis pitches. Most rehearse alone, many are nervous or presenting in a second language, and nearly all have a strict time limit.
 
-**AI tools and how.** *Building:* Claude Code, working from my written brief and value constraints in milestones (M1–M6 in git). Decisions are logged in `DECISIONS.md` and verification status in `TESTING.md`. *In the product:* Whisper for speech-to-text and Silero for voice-activity detection. Claude (Anthropic API) suggests marks, checks `[DEFINE]` terms and writes coaching. It reads only text and measured numbers, never audio. Code keeps it in check: at most one key line per section and about one pause per 40 words, no coaching tip without a cited measurement, and any quote the model uses as evidence must appear verbatim in the transcript or the check falls back to a labelled heuristic.
+## Why voice
 
-**What's next.** Fuzzier alignment for names and numbers. Fully local streaming recognition for live per-mark cues during a take. A shared marked-script format, so an advisor can mark a student's script and review their takes. Testing with real students before a real deadline.
+What Take Two checks only exists in how you say things: pace, pauses, timing. A transcript loses all of it. It's also hard to notice yourself while you're talking, because you're reading, maybe holding a clicker, and focused on the words. So the app does the listening during the take. Marking up a script and reviewing results are easier with a keyboard and screen, so those parts stay that way.
+
+## How it works
+
+You add a few marks to the script: a time budget per section, `[KEY]` for lines to slow down on, `/` and `//` for short and long pauses, and `[DEFINE: term]` for jargon. You rehearse from a teleprompter view. Afterwards you get your script back with each mark labelled met, close, or diverged, the actual measurement (like "19% faster than your median"), and a click to hear that moment. There's no overall score. An Improvise mode handles unscripted speaking, tracking pace, filler words and hedging against ranges you set.
+
+## How it's built
+
+FastAPI and TypeScript, running locally. faster-whisper transcribes with word timestamps, and Silero's voice activity detector measures pauses straight from the audio. Pace is compared to your own median for that take, not a fixed target. Audio stays on your computer unless you add a cloud key. There are 133 unit tests, plus a synthetic recording with known pauses and speed changes that runs through the full pipeline.
+
+## AI tools
+
+I built it with Claude Code, in milestones, from a spec and product rules I wrote first (commits M1 to M10). In the app, Whisper and Silero handle audio. Claude handles optional features: suggesting marks, checking whether jargon was defined, coaching notes, and Improvise content feedback. It only sees text and numbers, never audio, and the code checks its output, for example dropping any quote that isn't actually in the transcript. These features have only been tested against a mocked model so far, so a real API run is next.
+
+## What's next
+
+Practicing single lines, handling paraphrasing and misheard names, Q&A practice with questions generated from your script, importing PowerPoint speaker notes, and testing with real students.

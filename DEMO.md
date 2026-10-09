@@ -1,26 +1,50 @@
 # Demo: the speech about Take Two (recommended)
 
-`demo_speech.md` is a ~2-minute talk *about* Take Two, written in Take Two's own marks (4 timed sections, 3 `[KEY]` lines, 9 pauses, 2 `[DEFINE]` terms, 233 words). You perform it into the app, so the demo is the pitch and the report grades the pitch.
+`demo_speech.md` is a two-minute talk about Take Two, marked up with Take Two's own marks. I perform it into the app, and then the report shows how I did on it. So the pitch and the demo are the same thing.
 
-**Setup.** `.\run.ps1`, open http://127.0.0.1:8765, paste `demo_speech.md` on the Script tab. Do one practice take first so the budgets fit your pace (edit them; they are yours).
+## Before the demo
 
-**Planted divergences.** Deliver the speech well except for these two spots, so the report has something to show:
+1. Run `.\run.ps1`, open http://127.0.0.1:8765, and paste `demo_speech.md` into the Script tab.
+2. Do one practice take and adjust the section time budgets to fit my actual pace.
+3. Record a backup take with the planned mistakes below and leave it in Takes, in case the live one fails.
+4. Set the teleprompter text size (A−/A+) and close any other tabs using the microphone.
 
-1. **The irony line.** Rush *"A coach that rewards even pace cannot tell a deliberate pause from dead air."* and go straight into the next section without the `//`. The report will flag the line about missed pauses for a missed pause.
-2. **One skipped pause.** Say *"right now is marked up, and Take Two is listening"* without the `/`.
+## Planned mistakes
 
-Leave both `[DEFINE]`s and the last two `[KEY]` lines intact so the report shows greens as well as reds. (Optional third: drop *"which is my own typical pace in this take"* to make `median` undefined.)
+I deliver the speech normally except in two places, so the report has something to flag:
 
-**Run of show (about 3:15).**
+1. I rush the line "A coach that rewards even pace cannot tell a deliberate pause from dead air" and skip the long pause after it. That gets the line about missed pauses flagged for a missed pause.
+2. I skip the short pause in "right now is marked up, / and Take Two is listening".
 
-- **0:00 to 2:10: perform it.** Rehearse tab: the speech is on screen as a teleprompter, in large type with its marks drawn (`[KEY]` lines tinted, `/` and `//` as gaps, defined terms underlined). Set the size with A−/A+ before you start (it is remembered). Record and read from the screen. The highlight follows your *plan* (each section's budget spread over its lines), not your voice, so if you get ahead or behind, tap ↓ / Space or ↑ (a presentation clicker's page keys work too) and it continues from that line. The planned-section line and the loudness meter move while you talk. Stop.
-- **2:10: the report.** *"That was the pitch. Here's how I did against my own marks."* Hover the red `KEY` on the irony line: *"Faster than my own median, and no pause after it. That's the one line I wrote about pauses."* Click it so it plays back.
-- **2:30.** Hover the `/` before "and Take Two is listening": measured silence against the 0.7 s target. Then hover a green `//`: *"met your mark."*
-- **2:45.** Point at the `DEFINE: voice activity detector` chip: defined, with the evidence quote and timestamp. Then the section bars: budget vs. spoken time, and "cut to fit" in words at your own median if a section ran over. If asked where a number comes from, point at the timeline strip at the top: silences, line spans and each mark at the moment it was measured; click it to hear that moment.
-- **2:55.** The **Focus for the next take** card: at most three marks, written by the app from the numbers (no model): *"Next time, these."*
-- **3:00: close.** *"No score. Each mark is something I chose, and the report tells me where I diverged from it."*
+Everything else, including both defined terms and the other two key lines, should come out met.
 
-For the 2–3 minute video, cut the performance to its first section plus the irony line, then show the full report walk.
+## Live demo (about 3½ minutes)
+
+- **0:00, perform the speech (about 2:10).** I record from the Rehearse tab and read from the teleprompter. The highlight follows my planned timing, not my voice, so if I get ahead or behind I nudge it with the arrow keys or a clicker.
+- **2:10, while it analyzes:** "That was the pitch. Now here's how I did against my own marks."
+- **2:20, the rushed line.** Hover its KEY mark: faster than my median and no pause after. Click it to play it back.
+- **2:35, pauses.** Hover the skipped short pause and show the measured silence next to the 0.7 s target, then a long pause that was met. The timeline at the top shows where each measurement came from.
+- **2:50, definitions and timing.** The "voice activity detector" mark shows the quote where I defined it. The section bars show time against budget, and how many words to cut if a section ran over.
+- **3:05, Focus for the next take.** The app picks up to three marks to work on next time, from the numbers alone.
+- **3:15, close:** "There's no score. Every mark is something I chose, the audio never left this laptop, and the report shows where I drifted from what I meant to do."
+
+If there's extra time, I do a one-minute Improvise round: shuffle a topic, set a 30-second goal, choose Delivery only, talk, and show the pace, filler and hedging results.
+
+## Video (2–3 minutes)
+
+- **0:00–0:15:** one line to camera about what Take Two does.
+- **0:15–0:30:** the marked speech in the Script tab.
+- **0:30–1:10:** recording the first section, including the rushed line, then cut.
+- **1:10–2:30:** the report walkthrough above.
+- **2:30–2:50:** the closing line.
+
+Record the screen and microphone together, so the take in the report is the one viewers just heard.
+
+## If something breaks
+
+- **Analysis fails:** the recording is kept. Click Retry, or open the backup take.
+- **Microphone is blocked:** open the backup take, or click Load example take and switch to the coral demo below. Mention that the example uses a synthetic voice.
+- **Transcription is slow:** restart with `TAKE_TWO_STT_MODEL=base.en`.
 
 ---
 
