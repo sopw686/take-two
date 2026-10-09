@@ -37,6 +37,11 @@ class Settings(BaseModel):
     baseline_min_words: int = Field(4, ge=1, le=20)
     section_tolerance_pct: float = Field(10.0, ge=0.0, le=100.0)
     min_silence_s: float = Field(0.15, ge=0.05, le=1.0)
+    # Alignment: a misheard word matches its script word at this character similarity (1.0 = exact only),
+    # and a line too reworded to align is still timed when this much of it was spoken between found neighbours.
+    fuzzy_match_ratio: float = Field(0.8, ge=0.6, le=1.0)
+    fuzzy_min_chars: int = Field(4, ge=3, le=10)
+    paraphrase_min_words_pct: float = Field(30.0, ge=0.0, le=100.0)
     conventions_enabled: bool = False
     conventions_wpm_min: float = Field(130.0, ge=40.0, le=400.0)
     conventions_wpm_max: float = Field(170.0, ge=40.0, le=400.0)

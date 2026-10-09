@@ -219,10 +219,18 @@ def drill_summary(result: dict, drill: dict) -> list[str]:
     end_note = " (measured to the end of the recording)"
     for r in result["lines"]:
         number = drill["line_start"] + r["index"] + 1
+        k = r.get("key")
+        who = "This try" if drill.get("kind") == "line" else f"Line {number}" + (" [KEY]" if k else "")
+        if r["status"] == "paraphrased":
+            text = (f"{who}: paraphrased, {r['duration_s']:.1f} s; its words do not match the script closely "
+                    "enough to compare its rate with your median")
+            if k and k.get("pause_after_s") is not None:
+                text += f"; pause after {k['pause_after_s']:.1f} s: {_PAUSE.get(k['pause_status'], k['pause_status'])}"
+            out.append(text + ".")
+            continue
         if r["status"] != "ok":
             out.append(f"Line {number} was not found in this recording.")
             continue
-        k = r.get("key")
         pct = k.get("wpm_vs_median_pct") if k else (
             (r["wpm"] - median) / median * 100.0 if r.get("wpm") and median else None)
         if pct is not None:
@@ -230,7 +238,6 @@ def drill_summary(result: dict, drill: dict) -> list[str]:
                     f"({median:.0f} wpm)" + (f", {_RATE.get(k['rate_status'], k['rate_status'])}" if k else ""))
         else:
             rate = "rate not compared (the full take has no median)" if not median else "too few words to measure a rate"
-        who = "This try" if drill.get("kind") == "line" else f"Line {number}" + (" [KEY]" if k else "")
         text = f"{who}: {rate}"
         if k and k.get("pause_after_s") is not None:
             to_end = bool(k.get("pause_window")) and abs(k["pause_window"][1] - duration) < 0.01

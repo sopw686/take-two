@@ -335,3 +335,9 @@ button.mark.pause { font-size: 14px; }
 /* A/B playback in the take comparison */
 .play-cell { margin-left: 4px; border: 1px solid var(--rule); background: transparent; border-radius: 999px; width: 24px; height: 24px; padding: 0; font-size: 11px; color: var(--accent); vertical-align: middle; }
 .play-cell.on { background: var(--accent); color: white; border-color: var(--accent); }
+
+/* paraphrased lines, misheard words */
+.line.paraphrased .line-text { opacity: 0.75; }
+.said { font-family: var(--sans); color: var(--ink); margin: 2px 0; }
+.w.misheard { text-decoration: underline dotted var(--accent); text-underline-offset: 4px; }
+.tl-line.tl-para { opacity: 0.35; stroke: var(--unk); stroke-dasharray: 3 2; }

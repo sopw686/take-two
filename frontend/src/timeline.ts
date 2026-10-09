@@ -23,9 +23,9 @@ export function timelineStrip(a: Analysis, seek: (t: number) => void): { el: HTM
   }
   for (const l of a.lines) {
     if (l.start === null || l.end === null) continue;
-    const st = l.key ? `st-${statusTone(l.key.status)}` : "";
+    const st = (l.key ? `st-${statusTone(l.key.status)}` : "") + (l.status === "paraphrased" ? " tl-para" : "");
     const what = l.key ? ` · KEY ${statusGlyph(l.key.status)}` : "";
-    parts.push(`<rect class="tl-line ${st}" x="${x(l.start)}" y="18" width="${w(l.start, l.end)}" height="14" rx="2"><title>Line ${l.index + 1 + off}: ${fmtTime(l.start)}–${fmtTime(l.end)}${what} · “${esc(l.text.slice(0, 60))}”</title></rect>`);
+    parts.push(`<rect class="tl-line ${st}" x="${x(l.start)}" y="18" width="${w(l.start, l.end)}" height="14" rx="2"><title>Line ${l.index + 1 + off}: ${fmtTime(l.start)}–${fmtTime(l.end)}${what}${l.status === "paraphrased" ? " · paraphrased" : ""} · “${esc(l.text.slice(0, 60))}”</title></rect>`);
   }
   const tick = (t: number | null | undefined, status: string, label: string) => {
     if (t === null || t === undefined) return;

@@ -86,7 +86,8 @@ function lineEl(a: Analysis, line: LineRow, diff: boolean): HTMLElement {
     for (const p of pauseAt(i)) parts.push(pauseChip(p));
     const e = emph.find((x) => x.word_index === i);
     const dropped = diff && w.dropped;
-    const cls = ["w", e ? `emph st-${statusTone(e.status)} tip` : "", dropped ? "dropped" : ""].filter(Boolean).join(" ");
+    const misheard = diff && w.heard;
+    const cls = ["w", e ? `emph st-${statusTone(e.status)} tip` : "", dropped ? "dropped" : "", misheard ? "misheard" : ""].filter(Boolean).join(" ");
     const attrs: Record<string, string> = { class: cls };
     if (e) {
       attrs["data-tip"] = `Emphasis (experimental): ${e.delta_db !== null ? `${e.delta_db >= 0 ? "+" : ""}${e.delta_db.toFixed(1)} dB vs the line's median` : "no measurement"}${e.word_f0 && e.line_median_f0 ? `, pitch ${e.word_f0.toFixed(0)} Hz vs ${e.line_median_f0.toFixed(0)} Hz` : ""}.`;
@@ -94,6 +95,7 @@ function lineEl(a: Analysis, line: LineRow, diff: boolean): HTMLElement {
       attrs["aria-label"] = `${w.text}, emphasis: ${attrs["data-tip"]}`;
     }
     if (dropped) attrs.title = "In the script, not heard in this take";
+    if (misheard) attrs.title = `Heard as “${w.heard}” and matched as a likely mishearing`;
     if (w.start !== null) attrs["data-start"] = String(w.start);
     parts.push(h("span", attrs, w.text, e ? h("span", { class: "glyph", "aria-hidden": "true" }, statusGlyph(e.status)) : null), " ");
   });
@@ -103,9 +105,17 @@ function lineEl(a: Analysis, line: LineRow, diff: boolean): HTMLElement {
   const differ = diff && line.words_differ ? ` · ${line.words_differ} word${line.words_differ === 1 ? "" : "s"} differ` : "";
   const meta = line.status === "not_found"
     ? "not found in this take"
-    : `${fmtTime(line.start)} – ${fmtTime(line.end)} · ${line.wpm?.toFixed(0) ?? "–"} wpm` + (line.coverage < 1 ? ` · ${Math.round(line.coverage * 100)}% of words matched` : "") + differ;
-  el = h("div", { class: `line ${line.status === "not_found" ? "not-found" : ""} ${line.is_key ? "is-key" : ""}`, "data-line": String(line.index), "data-start": line.start !== null ? String(line.start) : "" },
+    : line.status === "paraphrased"
+      ? `${fmtTime(line.start)} – ${fmtTime(line.end)} · paraphrased: timed, not rate-checked`
+      : `${fmtTime(line.start)} – ${fmtTime(line.end)} · ${line.wpm?.toFixed(0) ?? "–"} wpm` + (line.coverage < 1 ? ` · ${Math.round(line.coverage * 100)}% of words matched` : "") + differ;
+  const saidEl = line.status === "paraphrased" && line.said
+    ? h("div", { class: "said small", "data-start": String(line.said.start),
+      title: "Too few words matched the script to compare this line's rate with your median; its time still counts toward its section." },
+      h("span", { class: "muted" }, "You said: "), `“${line.said.text}”`)
+    : null;
+  el = h("div", { class: `line ${line.status === "not_found" ? "not-found" : line.status === "paraphrased" ? "paraphrased" : ""} ${line.is_key ? "is-key" : ""}`, "data-line": String(line.index), "data-start": line.start !== null ? String(line.start) : "" },
     h("div", { class: "line-text" }, ...parts),
+    saidEl,
     h("div", { class: "line-meta muted small" }, meta));
   el.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
@@ -285,7 +295,8 @@ export function renderReport(root: HTMLElement): void {
     compared ? h("label", { class: "diff-toggle" }, diffToggle, ` What you said vs. the script${totalDiffer ? ` (${totalDiffer} words differ)` : ""}`)
       : h("span", { class: "diff-toggle" }, "Re-analyze to compare what you said with the script (this take predates it)."));
   const diffLegend = diff ? h("p", { class: "legend muted small" },
-    h("span", { class: "w dropped" }, "struck"), " = in the script, not heard · ", h("span", { class: "adlib" }, "boxed"), " = said, not in the script") : null;
+    h("span", { class: "w dropped" }, "struck"), " = in the script, not heard · ", h("span", { class: "adlib" }, "boxed"), " = said, not in the script · ",
+    h("span", { class: "w misheard" }, "dotted"), " = heard as a similar word (hover to see it)") : null;
 
   const tl = timelineStrip(a, (t) => play(t));
   root.append(

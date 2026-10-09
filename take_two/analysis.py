@@ -8,12 +8,13 @@ mark", "faster/slower than your median". Never a grade.
 
 from __future__ import annotations
 
+import math
 from statistics import median
 
 from take_two.align import Alignment, TokenAlignment, adlib_spans, align
 from take_two.audio import Silence, longest_silence_between
 from take_two.config import Settings
-from take_two.marks import Script, format_budget
+from take_two.marks import Script, Token, format_budget, normalize_word
 from take_two.stt.base import Transcript
 
 
@@ -26,8 +27,11 @@ def _fmt_delta(seconds: float) -> str:
     return f"{format_budget(abs(seconds))} {sign}"
 
 
+Anchors = dict[int, tuple[TokenAlignment, TokenAlignment]]
+
+
 def _nearest_aligned_before(al: Alignment, line: int, word_index: int, ok_lines: set[int],
-                            max_hops: int | None = None) -> TokenAlignment | None:
+                            max_hops: int | None = None, anchors: Anchors | None = None) -> TokenAlignment | None:
     """Nearest aligned token at or before (line, word_index), only from lines that were found."""
     toks = al.line_tokens(line)
     if line in ok_lines:
@@ -39,6 +43,8 @@ def _nearest_aligned_before(al: Alignment, line: int, word_index: int, ok_lines:
         hops += 1
         if max_hops is not None and hops > max_hops:
             break
+        if anchors and ln in anchors:
+            return anchors[ln][1]
         if ln not in ok_lines:
             continue
         t = al.last_aligned(ln)
@@ -48,7 +54,7 @@ def _nearest_aligned_before(al: Alignment, line: int, word_index: int, ok_lines:
 
 
 def _nearest_aligned_at_or_after(al: Alignment, line: int, word_index: int, n_lines: int, ok_lines: set[int],
-                                 max_hops: int | None = None) -> TokenAlignment | None:
+                                 max_hops: int | None = None, anchors: Anchors | None = None) -> TokenAlignment | None:
     toks = al.line_tokens(line)
     if line in ok_lines:
         for t in toks[word_index:]:
@@ -59,12 +65,65 @@ def _nearest_aligned_at_or_after(al: Alignment, line: int, word_index: int, n_li
         hops += 1
         if max_hops is not None and hops > max_hops:
             break
+        if anchors and ln in anchors:
+            return anchors[ln][0]
         if ln not in ok_lines:
             continue
         t = al.first_aligned(ln)
         if t:
             return t
     return None
+
+
+_FILLERS = {"um", "uh", "umm", "uhh", "erm", "er", "hmm", "mm"}
+# Common words that say nothing about which line was meant; they do not count as the line's own words.
+_STOPWORDS = {"this", "that", "with", "from", "have", "were", "they", "them", "then", "than", "there", "their",
+              "these", "those", "which", "what", "when", "where", "will", "would", "could", "should", "been",
+              "into", "about", "also", "some", "more", "very", "just", "here", "only", "over", "such", "each",
+              "like", "much", "most", "other", "because", "really", "going", "know", "think"}
+
+
+def _paraphrased(script: Script, al: Alignment, transcript: Transcript, line_rows: list[dict],
+                 settings: Settings, silences: list[Silence]) -> dict[int, tuple[int, int]]:
+    """Lines said in other words: {line: (first, last transcript word)}.
+
+    A line qualifies when it was not found verbatim, both neighbouring lines were found,
+    the speech between them holds enough words (at least 2, and paraphrase_min_words_pct
+    of the line), and at least one of the line's own content words was heard there. That
+    last condition keeps an unrelated aside in place of a skipped line "not found". The
+    span stops at a pause before the first and after the last of those words, so a
+    neighbour's stray last word (and the pause after it) is not pulled into it. Two unfound
+    lines in a row stay "not found": their words cannot be split honestly.
+    """
+    words = transcript.words
+    brk = settings.short_pause_s * settings.pause_near_ratio  # a silence this long ends a stretch of speech
+    out: dict[int, tuple[int, int]] = {}
+    for i in range(1, len(script.lines) - 1):
+        if line_rows[i]["status"] != "not_found" or not script.lines[i].tokens:
+            continue
+        if line_rows[i - 1]["status"] != "ok" or line_rows[i + 1]["status"] != "ok":
+            continue
+        before, after = al.last_aligned(i - 1), al.first_aligned(i + 1)
+        if before is None or after is None:
+            continue
+        lo, hi = max(before.transcript_indexes), min(after.transcript_indexes)
+        own_words = {n for t in script.lines[i].tokens for n in t.norm
+                     if len(n) >= settings.fuzzy_min_chars and n not in _STOPWORDS}
+        span = [w for w in range(lo + 1, hi)
+                if (normalize_word(words[w].text) or [""])[0] not in _FILLERS]
+        own_at = [k for k, w in enumerate(span) if own_words & set(normalize_word(words[w].text))]
+        if not own_at:
+            continue
+        first, last = own_at[0], own_at[-1]
+        while first > 0 and longest_silence_between(silences, words[span[first - 1]].end, words[span[first]].start) < brk:
+            first -= 1
+        while last < len(span) - 1 and longest_silence_between(silences, words[span[last]].end, words[span[last + 1]].start) < brk:
+            last += 1
+        span = span[first:last + 1]
+        need = max(2, math.ceil(settings.paraphrase_min_words_pct / 100.0 * len(script.lines[i].tokens)))
+        if len(span) >= need:
+            out[i] = (span[0], span[-1])
+    return out
 
 
 def _about_words(raw: float) -> int:
@@ -108,7 +167,7 @@ def total_fit(section_rows: list[dict], spoken_start: float | None, spoken_end: 
 def analyze(script: Script, transcript: Transcript, silences: list[Silence], settings: Settings,
             audio_duration: float, baseline_override: dict | None = None) -> dict:
     """baseline_override {"median_wpm", "source"}: judge rates against another take's median (a drill has none of its own)."""
-    al = align(script, transcript)
+    al = align(script, transcript, settings)
     n_lines = len(script.lines)
 
     # ---- lines -------------------------------------------------------------
@@ -123,14 +182,31 @@ def analyze(script: Script, transcript: Transcript, silences: list[Silence], set
             "duration_s": _r(lt.duration, 3) if ok else None,
             "wpm": _r(lt.wpm(), 1) if ok else None,
             "status": "ok" if ok else "not_found",
-            "words": [{"index": t.token.index, "text": t.token.text, "start": _r(t.start, 3), "end": _r(t.end, 3)}
+            "words": [{"index": t.token.index, "text": t.token.text, "start": _r(t.start, 3), "end": _r(t.end, 3),
+                       **({"heard": t.heard} if t.fuzzy else {})}
                       for t in al.line_tokens(ln.index)],
         })
 
     ok_lines = {r["index"] for r in line_rows if r["status"] == "ok"}
 
+    # ---- paraphrased lines: timed from the words between their neighbours, never rate-checked ----
+    words = transcript.words
+    anchors: Anchors = {}
+    claimed: set[int] = set()
+    for i, (w0, w1) in _paraphrased(script, al, transcript, line_rows, settings, silences).items():
+        start, end = words[w0].start, words[w1].end
+        line_rows[i].update({"status": "paraphrased", "start": _r(start, 3), "end": _r(end, 3),
+                             "duration_s": _r(end - start, 3), "wpm": None,
+                             "said": {"text": " ".join(w.text for w in words[w0:w1 + 1]), "start": _r(start, 3),
+                                      "end": _r(end, 3), "words": [w0, w1]}})
+        n_tok = len(script.lines[i].tokens)
+        anchors[i] = (TokenAlignment(Token(line=i, index=0, text=words[w0].text, norm=[]), words[w0].start, words[w0].end, [w0]),
+                      TokenAlignment(Token(line=i, index=n_tok - 1, text=words[w1].text, norm=[]), words[w1].start, words[w1].end, [w1]))
+        claimed.update(range(w0, w1 + 1))
+    timed = {"ok", "paraphrased"}
+
     # ---- what was said vs. the script ----------------------------------------
-    spans = adlib_spans(al, transcript, ok_lines)
+    spans = adlib_spans(al, transcript, ok_lines, frozenset(claimed))
     for ln, row in zip(script.lines, line_rows):
         if row["status"] != "ok":
             row["adlibs"], row["words_differ"] = [], None
@@ -162,7 +238,7 @@ def analyze(script: Script, transcript: Transcript, silences: list[Silence], set
     # ---- sections ---------------------------------------------------------
     section_rows: list[dict] = []
     for sec in script.sections:
-        rows = [line_rows[i] for i in range(sec.line_start, sec.line_end) if line_rows[i]["status"] == "ok"]
+        rows = [line_rows[i] for i in range(sec.line_start, sec.line_end) if line_rows[i]["status"] in timed]
         start = min((r["start"] for r in rows), default=None)
         end = max((r["end"] for r in rows), default=None)
         dur = (end - start) if start is not None and end is not None else None
@@ -198,13 +274,14 @@ def analyze(script: Script, transcript: Transcript, silences: list[Silence], set
                      "wpm": row["wpm"], "median_wpm": _r(median_wpm, 1), "wpm_vs_median_pct": None,
                      "pause_after_s": None, "pause_after_target_s": settings.key_pause_after_s,
                      "slower_target_pct": settings.key_slower_pct, "pause_window": None}
-        if row["status"] == "ok" and row["wpm"]:
-            if median_wpm:
+        paraphrased = row["status"] == "paraphrased"
+        if (row["status"] == "ok" and row["wpm"]) or paraphrased:
+            if median_wpm and not paraphrased:
                 pct = (row["wpm"] - median_wpm) / median_wpm * 100.0
                 key["wpm_vs_median_pct"] = _r(pct, 1)
                 key["met_rate"] = pct <= -settings.key_slower_pct
-            last = al.last_aligned(ln.index)
-            nxt = _nearest_aligned_at_or_after(al, ln.index, len(ln.tokens), n_lines, ok_lines)
+            last = anchors[ln.index][1] if paraphrased else al.last_aligned(ln.index)
+            nxt = _nearest_aligned_at_or_after(al, ln.index, len(ln.tokens), n_lines, ok_lines, anchors=anchors)
             if last is not None:
                 t0 = last.start or 0.0
                 t1 = nxt.end if nxt is not None and nxt.end is not None else audio_duration
@@ -213,7 +290,12 @@ def analyze(script: Script, transcript: Transcript, silences: list[Silence], set
                 key["pause_window"] = [_r(last.end, 3), _r(nxt.start if nxt else audio_duration, 3)]
                 key["met_pause"] = pause >= settings.key_pause_after_s
             pct = key["wpm_vs_median_pct"]
-            if pct is None:
+            if paraphrased:
+                key["paraphrased"] = True
+                key["rate_status"] = "unmeasurable"
+                key["rate_note"] = ("This line was paraphrased: its words do not match the script closely enough "
+                                    "for a words-per-minute rate, so it is not compared with your median.")
+            elif pct is None:
                 key["rate_status"] = "unknown"
                 if baseline_override is not None:
                     key["rate_note"] = "The full take this drill came from has no median, so the rate is not compared."
@@ -232,7 +314,10 @@ def analyze(script: Script, transcript: Transcript, silences: list[Silence], set
                 key["pause_status"] = "short"
             else:
                 key["pause_status"] = "missing"
-            if key["rate_status"] == "met" and key["pause_status"] == "met":
+            if paraphrased:
+                # Never "close": the rate was not measured, so only a missing pause can decide anything.
+                key["status"] = "diverged" if key["pause_status"] == "missing" else "unmeasurable"
+            elif key["rate_status"] == "met" and key["pause_status"] == "met":
                 key["status"] = "met"
             elif key["rate_status"] == "diverged" or key["pause_status"] == "missing":
                 key["status"] = "diverged"
@@ -245,14 +330,20 @@ def analyze(script: Script, transcript: Transcript, silences: list[Silence], set
     for ln in script.lines:
         for pm in ln.pauses:
             target = settings.long_pause_s if pm.kind == "//" else settings.short_pause_s
-            if ln.index not in ok_lines:
+            at_end = pm.word_index >= len(ln.tokens)
+            if ln.index not in ok_lines and not (ln.index in anchors and at_end):
                 pause_rows.append({"line": ln.index, "word_index": pm.word_index, "kind": pm.kind, "target_s": target,
                                    "measured_s": None, "whisper_gap_s": None, "at_time": None, "window": None,
                                    "status": "unmeasurable", "before": None, "after": None,
-                                   "note": "line not found in this take"})
+                                   "note": "line was paraphrased, so this mark cannot be placed among its words"
+                                   if ln.index in anchors else "line not found in this take"})
                 continue
-            prev = _nearest_aligned_before(al, ln.index, pm.word_index, ok_lines, max_hops=1)
-            nxt = _nearest_aligned_at_or_after(al, ln.index, pm.word_index, n_lines, ok_lines, max_hops=1)
+            if ln.index in anchors:  # a mark at the end of a paraphrased line: from its last word to the next line
+                prev = anchors[ln.index][1]
+                nxt = _nearest_aligned_at_or_after(al, ln.index, pm.word_index, n_lines, ok_lines, max_hops=1, anchors=anchors)
+            else:
+                prev = _nearest_aligned_before(al, ln.index, pm.word_index, ok_lines, max_hops=1, anchors=anchors)
+                nxt = _nearest_aligned_at_or_after(al, ln.index, pm.word_index, n_lines, ok_lines, max_hops=1, anchors=anchors)
             row = {"line": ln.index, "word_index": pm.word_index, "kind": pm.kind, "target_s": target,
                    "measured_s": None, "whisper_gap_s": None, "at_time": None, "window": None,
                    "status": "unmeasurable",
@@ -276,13 +367,16 @@ def analyze(script: Script, transcript: Transcript, silences: list[Silence], set
     # ---- summary -----------------------------------------------------------
     summary: list[str] = []
     keys = [r["key"] for r in line_rows if r.get("key")]
-    found_keys = [k for k in keys if k["status"] != "not_found"]
-    if keys:
+    found_keys = [k for k in keys if k["status"] != "not_found" and not k.get("paraphrased")]
+    missing_keys = sum(1 for k in keys if k["status"] == "not_found")
+    if found_keys:
         met = sum(1 for k in found_keys if k["status"] == "met")
         s = f"{met} of {len(found_keys)} key lines met your marks."
-        if len(found_keys) < len(keys):
-            s += f" {len(keys) - len(found_keys)} not found in this take."
+        if missing_keys:
+            s += f" {missing_keys} not found in this take."
         summary.append(s)
+    elif missing_keys:
+        summary.append(f"{missing_keys} key line{'s' if missing_keys != 1 else ''} not found in this take.")
     if pause_rows:
         measurable = [p for p in pause_rows if p["status"] != "unmeasurable"]
         met = sum(1 for p in measurable if p["status"] == "met")
@@ -297,6 +391,9 @@ def analyze(script: Script, transcript: Transcript, silences: list[Silence], set
     for sr in section_rows:
         if sr["status"] in ("over", "under"):
             summary.append(f"{sr['name']} ran {sr['delta_label']} budget.")
+    para = [r for r in line_rows if r["status"] == "paraphrased"]
+    if para:
+        summary.append(f"{len(para)} line{'s' if len(para) != 1 else ''} paraphrased: timed, not rate-checked.")
     not_found = [r for r in line_rows if r["status"] == "not_found"]
     if not_found:
         summary.append(f"{len(not_found)} line{'s' if len(not_found) != 1 else ''} not found in this take.")

@@ -14,6 +14,9 @@ const FIELDS: Field[] = [
   { key: "line_min_coverage", label: "Minimum matched words per line (fraction)", step: 0.05, min: 0.1, max: 1, help: "Lines with fewer matched words are reported as not found rather than mis-scored." },
   { key: "baseline_min_words", label: "Minimum words for a line to count in your median", step: 1, min: 1, max: 20, help: "Very short lines distort the median rate." },
   { key: "min_silence_s", label: "Minimum silence to count as a pause (s)", step: 0.05, min: 0.05, max: 1, help: "Voice-activity detector granularity." },
+  { key: "fuzzy_match_ratio", label: "Misheard words: similarity to still match (0.6–1)", step: 0.05, min: 0.6, max: 1, help: "“leaching” for “bleaching” matches at 0.8. 1 means exact words only. Number words and un-/in- opposites never match loosely." },
+  { key: "fuzzy_min_chars", label: "Misheard words: shortest word matched loosely", step: 1, min: 3, max: 10, help: "Shorter words must match exactly." },
+  { key: "paraphrase_min_words_pct", label: "Paraphrased line: words spoken, at least (% of the line)", step: 5, min: 0, max: 100, help: "A line too reworded to align is still timed when this much speech, including one of its own words, sits between two found lines." },
 ];
 
 const IMPROV_FIELDS: Field[] = [
@@ -32,11 +35,13 @@ const IMPROV_FIELDS: Field[] = [
   { key: "improv_pace_var_pct", label: "Pace variation, at least (%)", step: 1, min: 0, max: 100, help: "How much your words per minute change across 15-second stretches." },
 ];
 
+const INTEGER = new Set(["baseline_min_words", "fuzzy_min_chars"]);
+
 export function openSettings(onChange: () => void): void {
   const cur = state.effectiveSettings();
   const inputs = new Map<keyof Settings, HTMLInputElement>();
   const row = (f: Field) => {
-    const inp = h("input", { type: "number", step: String(f.step), min: String(f.min), max: String(f.max), value: String(cur[f.key]) }) as HTMLInputElement;
+    const inp = h("input", { type: "number", step: String(f.step), min: String(f.min), max: String(f.max), value: String(cur[f.key]), "data-key": f.key }) as HTMLInputElement;
     inputs.set(f.key, inp);
     return h("label", { class: "setting" }, h("span", {}, f.label, h("small", { class: "muted" }, f.help)), inp);
   };
@@ -54,7 +59,10 @@ export function openSettings(onChange: () => void): void {
   // A blank or out-of-range field must not reach the server: NaN serializes to null and every take would fail.
   const num = (inp: HTMLInputElement, fallback: number): number => {
     const v = parseFloat(inp.value);
-    return Number.isFinite(v) ? Math.min(parseFloat(inp.max), Math.max(parseFloat(inp.min), v)) : fallback;
+    if (!Number.isFinite(v)) return fallback;
+    const c = Math.min(parseFloat(inp.max), Math.max(parseFloat(inp.min), v));
+    // Settings that count things (words, characters) must reach the server as whole numbers.
+    return INTEGER.has(inp.dataset.key ?? "") ? Math.round(c) : c;
   };
   const save = () => {
     const next: Settings = { ...cur };

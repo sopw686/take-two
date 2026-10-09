@@ -54,7 +54,7 @@ uv run pytest -m slow    # synthetic fixture through real local speech-to-text
 | Mark | Meaning | What is measured |
 |---|---|---|
 | `## Section name [2:00]` | Section with a time budget (m:ss) | Spoken duration vs. budget |
-| `[KEY]` at the start of a line | Key line: slower than your median, then a pause | Line rate vs. your median line rate in this take; silence after the line |
+| `[KEY]` at the start of a line | Key line: slower than your median, then a pause | Line rate vs. your median line rate in this take (a drill uses its full take's median; a paraphrased line is not rate-checked); silence after the line |
 | `word / word` | Deliberate short pause (default ≥ 0.7 s) | Silence at that point (voice-activity detector) |
 | `word // word` | Deliberate long pause (default ≥ 1.5 s) | Same |
 | `[DEFINE: term]` | The term must be explained aloud at or before its first use | Where the term was first spoken and whether a definition precedes it |
@@ -123,7 +123,7 @@ sample_script.md  a placeholder talk to try the marks on
 ## Known limitations
 
 - Word timestamps from Whisper drift by up to ~0.2 s; pauses are measured with a separate voice-activity detector, but line boundaries inherit that noise.
-- Words the recognizer gets wrong lower a line's "matched" coverage; a line under 50 % coverage is reported as not found rather than scored.
+- Words the recognizer gets slightly wrong ("leaching" for "bleaching") still match, and spoken years match digits. A line said in very different words is **paraphrased** (timed, counted in its section, but not rate-checked) when the lines around it were found and some of its own words were heard; otherwise it is reported as not found rather than scored. The thresholds are in Settings.
 - Whisper usually drops "um" and "uh"; the opt-in filler count is a lower bound.
 - The emphasis check is experimental and sensitive to microphone distance.
 - Mobile layouts are not a goal; use a laptop.

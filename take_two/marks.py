@@ -58,6 +58,7 @@ def normalize_word(raw: str) -> list[str]:
     w = w.replace("%", " percent ")
     out: list[str] = []
     for piece in re.split(r"[\s\-–—/]+", w):
+        piece = piece.strip(".,;:!?\"'()[]{}…“”‘’")  # "2019." and "(30" are numbers too
         if re.fullmatch(r"[\d,]+(\.\d+)?", piece):
             piece = piece.replace(",", "")
         if re.fullmatch(r"\d+", piece):

@@ -8,6 +8,9 @@ export interface Settings {
   baseline_min_words: number;
   section_tolerance_pct: number;
   min_silence_s: number;
+  fuzzy_match_ratio: number;
+  fuzzy_min_chars: number;
+  paraphrase_min_words_pct: number;
   conventions_enabled: boolean;
   conventions_wpm_min: number;
   conventions_wpm_max: number;
@@ -39,7 +42,7 @@ export interface Health {
 
 export type Status = "met" | "near" | "diverged" | "short" | "missing" | "unmeasurable" | "not_found" | "over" | "under" | "no_budget" | "ok" | "unknown";
 
-export interface WordRow { index: number; text: string; start: number | null; end: number | null; dropped?: boolean }
+export interface WordRow { index: number; text: string; start: number | null; end: number | null; dropped?: boolean; heard?: string }
 
 /** Words said between two script words that match no script word (ad-libs, restarts, fillers). */
 export interface AdlibSpan { word_index: number; text: string; start: number; end: number; words: number[]; repeat: boolean }
@@ -52,6 +55,7 @@ export interface KeyInfo {
   status: Status;
   rate_status: Status;
   rate_note?: string;
+  paraphrased?: boolean;
   pause_status: Status;
   wpm: number | null;
   median_wpm: number | null;
@@ -75,7 +79,9 @@ export interface LineRow {
   end: number | null;
   duration_s: number | null;
   wpm: number | null;
-  status: "ok" | "not_found";
+  status: "ok" | "not_found" | "paraphrased";
+  /** For a paraphrased line: the words said between its neighbours. */
+  said?: { text: string; start: number; end: number; words: [number, number] };
   words: WordRow[];
   key?: KeyInfo;
   adlibs?: AdlibSpan[];

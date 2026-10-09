@@ -19,7 +19,7 @@ FILLERS_2 = {("you", "know"), ("i", "mean"), ("sort", "of"), ("kind", "of")}
 
 def conventions_report(transcript: Transcript, analysis: dict, settings: Settings) -> dict:
     words = transcript.words
-    lines = [r for r in analysis.get("lines", []) if r.get("status") == "ok"]
+    lines = [r for r in analysis.get("lines", []) if r.get("status") in ("ok", "paraphrased")]
     start = min((r["start"] for r in lines), default=None)
     end = max((r["end"] for r in lines), default=None)
     spoken_words = [w for w in words if start is not None and end is not None and start <= w.start <= end]
