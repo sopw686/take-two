@@ -119,6 +119,7 @@ main { max-width: 1100px; margin: 0 auto 80px; padding: 0 24px; }
 .hl-key { background: var(--met-bg); color: var(--met); border-radius: 3px; }
 .hl-pause { color: var(--near); background: var(--near-bg); border-radius: 3px; }
 .hl-settings { color: var(--muted); }
+.hl-comment { color: var(--muted); }
 .script-badge { display: block; width: fit-content; margin-top: 3px; padding: 0 7px; border-radius: 999px; background: var(--accent-bg2); color: var(--accent); font-size: 11px; font-weight: 600; }
 .hl-define { background: var(--accent-bg2); color: var(--accent); border-radius: 3px; }
 .hl-emph { color: var(--div); }

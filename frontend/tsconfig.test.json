@@ -16,6 +16,7 @@
     "src/schedule.ts",
     "src/examinerMachine.ts",
     "src/silence.ts",
+    "src/improvscript.ts",
     "tests/*.ts"
   ]
 }

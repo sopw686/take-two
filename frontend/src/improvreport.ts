@@ -2,6 +2,8 @@
  *  annotated in place (fillers, hedges, hesitations, rising or fading endings, unclear words). */
 
 import { api } from "./api";
+import { editorNotice } from "./editor";
+import { improvToScript } from "./improvscript";
 import { clear, fmtClock, fmtTime, h } from "./dom";
 import { play, player } from "./player";
 import { state } from "./state";
@@ -224,13 +226,30 @@ function trendCard(a: ImprovAnalysis): HTMLElement | null {
         h("td", {}, v(x.hesitations_per_min)), h("td", {}, v(x.pitch_range_st))))))));
 }
 
-export function renderImprovReport(root: HTMLElement, again: (topic: string, question?: Question | null) => void): void {
+/** Put this take's words, with the pauses it made, on the Script tab for later refinement. */
+function editAsScript(a: ImprovAnalysis, toScript: () => void): void {
+  const r = a.improv;
+  const s = improvToScript({ topic: a.topic, goal_s: a.goal_s, words: a.transcript.words, sentences: r.sentences,
+    fillers: r.fillers.items, restarts: r.hesitation.restarts, deliberate: r.engagement.purposeful_pauses, hesitations: r.hesitation.pauses },
+  { longPauseS: state.effectiveSettings().long_pause_s, when: new Date(a.created_at).toLocaleDateString() });
+  if (state.scriptText.trim() && state.scriptText !== s.text
+    && !confirm("Replace the script on the Script tab with the words of this take?")) return;
+  state.setScript(s.text);
+  const left = [s.fillersRemoved ? `${s.fillersRemoved} filler${s.fillersRemoved === 1 ? "" : "s"}` : "",
+    s.restartsRemoved ? `${s.restartsRemoved} restart${s.restartsRemoved === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ");
+  editorNotice(`Imported your Improvise take as ${s.lines} line${s.lines === 1 ? "" : "s"}, one per sentence, with the ${s.deliberate + s.hesitations} pause${s.deliberate + s.hesitations === 1 ? "" : "s"} you made`
+    + `${s.hesitations ? ` (${s.hesitations} tagged as hesitation${s.hesitations === 1 ? "" : "s"})` : ""}.${left ? ` Left out ${left}.` : ""}`
+    + " Edit the wording, mark [KEY] lines, then rehearse it.");
+  toScript();
+}
+
+export function renderImprovReport(root: HTMLElement, again: (topic: string, question?: Question | null) => void, toScript: () => void): void {
   clear(root);
   const a = state.improv;
   if (!a) return;
   const p = player();
   if (!p.src.endsWith(a.audio_url)) p.src = a.audio_url;
-  const rerender = () => renderImprovReport(root, again);
+  const rerender = () => renderImprovReport(root, again, toScript);
   const headStatus = h("p", { class: "small warn", role: "status" });
   const reBtn = h("button", { class: "ghost-btn", type: "button", onClick: async () => {
     reBtn.setAttribute("disabled", "");
@@ -252,6 +271,9 @@ export function renderImprovReport(root: HTMLElement, again: (topic: string, que
         h("span", { class: "muted small" }, `${a.label ? a.label + " · " : ""}${new Date(a.created_at).toLocaleString()} · ${fmtTime(a.duration_s)}`)),
       h("div", { class: "head-actions" },
         h("button", { class: "ghost-btn", type: "button", onClick: () => again(a.topic, a.question) }, a.question ? "Answer it again" : "Try this topic again"),
+        h("button", { class: "ghost-btn", type: "button", disabled: !a.improv.words,
+          title: "Happy with how this went? Open its words on the Script tab, one line per sentence with your pauses marked, and refine it there.",
+          onClick: () => editAsScript(a, toScript) }, "Edit as a script"),
         reBtn)),
     headStatus,
     h("section", { class: "summary" }, h("ul", {}, ...a.summary.map((s) => h("li", {}, s))),

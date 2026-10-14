@@ -19,6 +19,12 @@ const CHEATSHEET: [string, string][] = [
   ["[SAY: word = KOH-ral]", "how you say a word, for Hear it (not checked in the report)"],
 ];
 
+/** A message for the next time the Script tab opens (e.g. "Imported your Improvise take…"). */
+let pendingNotice = "";
+export function editorNotice(msg: string): void {
+  pendingNotice = msg;
+}
+
 export const SETTINGS_LINE = /^\s*<!--\s*(?:take-two|taketwo|marked)\s*:/i;
 
 function highlightLine(line: string): string {
@@ -45,6 +51,8 @@ function highlightLine(line: string): string {
   // [DEFINE: multi word term] spans whitespace; colour it after the fact.
   out = out.replace(/\[DEFINE:\s*([^\]]+?)\s*\]/gi, (m) => `<span class="hl-define">${m}</span>`);
   out = out.replace(/\[SAY:[^\]]*\]/gi, (m) => `<span class="hl-say">${m}</span>`);
+  // A comment on one line (an imported take's "hesitation" tags) is a note, not script.
+  out = out.replace(/&lt;!--.*?--&gt;/g, (m) => `<span class="hl-comment">${m.replace(/<[^>]+>/g, "")}</span>`);
   return out;
 }
 
@@ -132,7 +140,8 @@ export function renderEditor(root: HTMLElement): void {
   tour = scriptTour(ta, code, () => loadSample("talk"));
   refresh();
 
-  const importStatus = h("p", { class: "small warn", role: "status" });
+  const importStatus = h("p", { class: pendingNotice ? "small muted" : "small warn", role: "status" }, pendingNotice);
+  pendingNotice = "";
   const pptxInput = h("input", { type: "file", accept: ".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation", hidden: "" }) as HTMLInputElement;
   pptxInput.addEventListener("change", async () => {
     const f = pptxInput.files?.[0];
