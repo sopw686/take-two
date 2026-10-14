@@ -39,6 +39,7 @@ export function scriptTour(ta: HTMLTextAreaElement, code: HTMLElement, loadSampl
     step = n;
     render();
     apply();
+    requestAnimationFrame(reveal);
   };
 
   function render(): void {
@@ -89,6 +90,21 @@ export function scriptTour(ta: HTMLTextAreaElement, code: HTMLElement, loadSampl
     if (top < ta.scrollTop || top > ta.scrollTop + ta.clientHeight - 120) ta.scrollTop = Math.max(0, top);
   }
 
+  /** If the marked line is below the window, scroll the editor (so the tour card beside it stays in view), then the page.
+   *  Run after layout: on first load the editor is not on the page yet when apply() first runs. */
+  function reveal(): void {
+    const span = code.querySelector<HTMLElement>(".hl-ln.tour-target");
+    if (!span) return;
+    const r = span.getBoundingClientRect();
+    const over = r.bottom + 24 - window.innerHeight;
+    if (over <= 0) return;
+    const before = ta.scrollTop;
+    ta.scrollTop = before + Math.max(0, Math.min(over, r.top - ta.getBoundingClientRect().top - 40));
+    const rest = over - (ta.scrollTop - before);
+    if (rest > 0) window.scrollBy({ top: rest });
+  }
+
   render();
+  if (step >= 0) requestAnimationFrame(reveal);
   return { el, apply, restart: () => go(0) };
 }

@@ -1,7 +1,7 @@
 [project]
 name = "take-two"
 version = "0.1.0"
-description = "Take Two: an intent-based rehearsal coach for science talks."
+description = "Take Two: a rehearsal coach that checks your delivery against your own marks."
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.115",

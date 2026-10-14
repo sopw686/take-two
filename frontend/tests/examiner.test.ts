@@ -109,6 +109,19 @@ test("the maximum length always stops", () => {
   assert.deepEqual(feed({ silenceS: 3, maxS: 5 }, series(0, 10, -25)), { v: "max", t: 5 });
 });
 
+test("a newly opened microphone's digital silence does not set the room's floor", () => {
+  // Old rule: the -140 dB frames pinned the floor at -70, so a -45 dB room counted as speech forever.
+  const r = feed({ silenceS: 2, maxS: 60 }, [...series(0, 0.3, -140), ...series(0.3, 1, -45), ...series(1, 3, -25), ...series(3, 8, -45)]);
+  assert.equal(r.v, "silence");
+  assert.ok(r.t !== null && r.t >= 5 && r.t < 5.1);
+});
+
+test("the part-filled first frames of a new microphone do not drag the floor below the room", () => {
+  const r = feed({ silenceS: 2, maxS: 60 }, [...series(0, 0.1, -140), [0.1, -62], [0.15, -55], ...series(0.2, 1, -50), ...series(1, 3, -25), ...series(3, 8, -50)]);
+  assert.equal(r.v, "silence");
+  assert.ok(r.t !== null && r.t >= 5 && r.t < 5.1);
+});
+
 test("a click is not speech", () => {
   const r = feed({ silenceS: 2, maxS: 60 }, [...series(0, 0.5, -60), [1, -20], ...series(1.05, 6, -60)]);
   assert.equal(r.v, "listening");

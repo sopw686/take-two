@@ -127,6 +127,14 @@ def test_ipa_is_cleaned_into_kokoro_phonemes():
     assert nv.normalize_ipa("[ŋɡwiən]") == "ŋɡwiən" and nv.normalize_ipa("'gɪt") == "ˈɡɪt"
 
 
+def test_an_ipa_kokoro_cannot_say_falls_back_to_the_respelling_or_the_word():
+    known = lambda s: "".join(c for c in s if c.isalpha() or c in "ˈˌ")  # noqa: E731
+    assert nv.segment_phonemes(seg("coral,", ipa="123"), str.lower, known) == "coral,"
+    assert nv.segment_phonemes(seg("coral", ipa="//"), str.lower) == "coral"  # nothing left after cleaning
+    assert nv.segment_phonemes(seg("coral", ipa="123", say_as="KOH-ral"), str.lower, known).replace("ˈ", "") == "kohral"
+    assert nv.segment_phonemes(seg("coral", ipa="ˈkɔɹəl"), str.lower, known) == "ˈkɔɹəl"
+
+
 def test_a_respelling_becomes_one_word_stressed_at_its_capitals(phonemize):
     ph = nv.respelling_phonemes("KOH-ral", phonemize)
     assert " " not in ph and ph.count("ˈ") == 1 and ph.index("ˈ") < 3
@@ -222,6 +230,34 @@ def test_a_download_that_does_not_match_its_checksum_is_refused(tmp_path, monkey
         eng.load()
     assert eng.state == "failed" and "checksum" in eng.error
     assert not list(tmp_path.iterdir())  # no partial file left behind
+
+
+def test_a_failed_load_says_why_in_words_and_is_tried_again_after_a_while(tmp_path, monkeypatch):
+    import httpx
+    calls = []
+
+    def stream(*a, **k):
+        calls.append(a)
+        raise httpx.ConnectError("[WinError 10061] No connection could be made")
+    monkeypatch.setattr(httpx, "stream", stream)
+    eng = nv.Kokoro(tmp_path)
+    with pytest.raises(RuntimeError, match="could not reach GitHub"):
+        eng.load()
+    assert eng.state == "failed" and "WinError" not in eng.error and "ConnectError" not in eng.error
+    with pytest.raises(RuntimeError, match="could not reach GitHub"):
+        eng.load()  # within the cooldown: refused at once, no new download
+    assert len(calls) == 1 and eng.retry_in() > 0
+    eng._failed_at -= nv.RETRY_S + 1
+    with pytest.raises(RuntimeError):
+        eng.load()
+    assert len(calls) == 2
+
+
+def test_a_line_too_long_is_refused_before_the_model_loads(tmp_path):
+    eng = nv.Kokoro(tmp_path)
+    with pytest.raises(RuntimeError, match="too long"):
+        eng.render({"segments": [seg("word " * 300)]}, "af_heart")
+    assert eng.state == "not loaded"
 
 
 def test_the_status_says_the_first_use_downloads(tmp_path, monkeypatch):

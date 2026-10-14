@@ -4,6 +4,7 @@
 
 import { api } from "./api";
 import { h } from "./dom";
+import { stopSegment } from "./player";
 import { getSpeaker, onSegment, onVoiceNote, onVoicesChanged, stopAll, voiceKind, voicePicker, voicesReady } from "./speaker";
 import { wordPlan } from "./schedule";
 import { state } from "./state";
@@ -62,6 +63,7 @@ export function hearPanel(opts: HearOpts): HTMLElement {
   let version: "marked" | "coach" = "marked";
   const plans = new Map<string, CuePlan>();
   let speaking = false;
+  let playId = 0;  // each Hear it press; an older press that finishes must not reset the newer one's state
 
   const status = h("p", { class: "small muted", role: "status", "aria-live": "polite" });
   const textEl = h("p", { class: "hear-text" });
@@ -144,7 +146,7 @@ export function hearPanel(opts: HearOpts): HTMLElement {
         h("br"), h("small", { class: "muted" }, s.reason));
     })));
     if (plan.dropped?.length) {
-      out.push(h("p", { class: "small muted" }, `Dropped by code: ${plan.dropped.map((d) => `${d.count} ${d.reason}`).join("; ")}.`));
+      out.push(h("p", { class: "small muted" }, `Dropped by code: ${plan.dropped.map((d) => d.count === 1 ? d.reason : `${d.reason} (${d.count} times)`).join("; ")}.`));
     }
     if (picks.size && opts.onScriptChange) {
       const msg = h("span", { class: "small muted", role: "status" });
@@ -173,21 +175,26 @@ export function hearPanel(opts: HearOpts): HTMLElement {
     stopBtn.disabled = true;
   };
   hearBtn.addEventListener("click", async () => {
+    const mine = ++playId;
+    stopSegment();  // the take, if a line of it is playing
     const plan = await load();
-    if (!plan || !plan.segments.length) return;
+    if (!plan || !plan.segments.length || mine !== playId) return;
     const voice = getSpeaker("coach");
     stopBtn.disabled = false;
     speaking = true;
     status.textContent = `Preparing ${voice.label}…`;
     const playing = `Playing: ${version === "marked" ? "as you marked it" : "the coach's version"}, ${voice.label}.`;
     const shown = onSegment((i) => { if (i >= 0 && status.textContent?.startsWith("Preparing")) status.textContent = playing; });
+    let failed = "";
     try {
       await voice.speak(plan);
-      if (speaking) status.textContent = "";
     } catch (err) {
-      status.textContent = `The voice could not play: ${(err as Error).message}`;
+      failed = `The voice could not play: ${(err as Error).message}`;
     }
     shown();
+    if (mine !== playId) return;
+    if (failed) status.textContent = failed;
+    else if (speaking) status.textContent = "";
     speaking = false;
     stopBtn.disabled = true;
   });
@@ -206,9 +213,9 @@ export function hearPanel(opts: HearOpts): HTMLElement {
     h("p", { class: "small muted hear-note" }, SYNTHETIC_NOTE, " ", noteEl),
     voicePicker("coach", "Coach voice"));
   panel.addEventListener("voicechange", () => { const p = plans.get(key()); if (p) render(p); });
-  open = { panel, close: () => { stop(); unsub(); unnote(); panel.remove(); } };
   // Browsers load their voices a moment after the page: enable Hear it when they arrive.
-  onVoicesChanged(() => { const p = plans.get(key()); if (p && panel.isConnected) render(p); });
+  const unvoices = onVoicesChanged(() => { const p = plans.get(key()); if (p && panel.isConnected) render(p); });
+  open = { panel, close: () => { stop(); unsub(); unnote(); unvoices(); panel.remove(); } };
   void load();
   return panel;
 }
@@ -216,6 +223,7 @@ export function hearPanel(opts: HearOpts): HTMLElement {
 /** Say one word slowly, syllable by syllable, then at an ordinary pace. */
 export async function sayWord(word: string, respelling: string | null, onStatus: (msg: string) => void): Promise<void> {
   stopAll();
+  stopSegment();
   await voicesReady();
   const voice = getSpeaker("coach");
   const ok = voice.available();

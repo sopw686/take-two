@@ -12,12 +12,15 @@ const CHEATSHEET: [string, string][] = [
   ["<!-- take-two: short_pause_s=0.9 -->", "first line only: thresholds for this script, over the Settings dialog"],
   ["## Methods [1:30]", "section with a time budget (m:ss)"],
   ["[KEY] at line start", "a key line: say it slower than your median, then pause"],
-  ["word / word", "short pause (target ≥ 0.7 s)"],
-  ["word // word", "long pause (target ≥ 1.5 s)"],
+  ["word / word", "short pause (target ≥ {short_pause_s} s)"],
+  ["word // word", "long pause (target ≥ {long_pause_s} s)"],
   ["[DEFINE: term]", "a term your audience may not know (technical word, in-joke, reference): explain it aloud at or before its first use"],
   ["*word*", "emphasis (experimental)"],
   ["[SAY: word = KOH-ral]", "how you say a word, for Hear it (not checked in the report)"],
 ];
+
+// Shown only if the server's defaults never arrived.
+const PAUSE_FALLBACK: Record<string, unknown> = { short_pause_s: 0.7, long_pause_s: 1.5 };
 
 /** A message for the next time the Script tab opens (e.g. "Imported your Improvise take…"). */
 let pendingNotice = "";
@@ -66,6 +69,29 @@ export function renderEditor(root: HTMLElement): void {
 
   const stats = h("div", { class: "stats" });
   const settingsNote = h("p", { class: "small", role: "status" });
+  // The pause targets in the Marks legend follow Settings and the script's own settings line.
+  const meanings = CHEATSHEET.map(([, meaning]) => [h("dd", {}), meaning] as const);
+  const showTargets = (over: Partial<Settings> = {}) => {
+    const st: Record<string, unknown> = { ...PAUSE_FALLBACK, ...state.effectiveSettings(), ...over };
+    for (const [dd, meaning] of meanings) dd.textContent = meaning.replace(/\{(\w+)\}/g, (_, k: string) => String(st[k]));
+  };
+  showTargets();
+  // Clear keeps the old text until the next edit, so one click on "Undo clear" brings it back.
+  let cleared = "";
+  const clearBtn = h("button", { class: "ghost-btn", type: "button", onClick: () => {
+    if (cleared) {
+      const text = cleared;
+      cleared = "";
+      clearBtn.textContent = "Clear";
+      setText(text);
+      return;
+    }
+    if (!ta.value) return;
+    const text = ta.value;
+    setText("");
+    cleared = text;
+    clearBtn.textContent = "Undo clear";
+  } }, "Clear");
   let checkTimer = 0;
   let checked = "";
   const checkSettings = () => {
@@ -79,6 +105,7 @@ export function renderEditor(root: HTMLElement): void {
       if (!SETTINGS_LINE.test(first)) {
         settingsNote.textContent = "";
         settingsNote.className = "small";
+        showTargets();
         return;
       }
       try {
@@ -88,6 +115,7 @@ export function renderEditor(root: HTMLElement): void {
         settingsNote.textContent = r.error
           ? `Settings line: ${r.error}. Takes of this script will be refused until it is fixed.`
           : `Settings line: ${describeOverrides(r.from_script)}. These win over the Settings dialog for takes of this script.`;
+        showTargets(r.error ? {} : r.from_script);
       } catch {
         settingsNote.textContent = "";
       }
@@ -102,14 +130,19 @@ export function renderEditor(root: HTMLElement): void {
     const budget = secs.reduce((a, s) => a + (s.budget_s ?? 0), 0);
     const rate = state.analysis?.baseline.median_wpm ?? null;
     const est = rate ? words / rate : words / 140;
-    const m = Math.floor(est);
+    const estS = Math.round(est * 60);  // whole seconds first, so it never reads 1:60
+    const named = secs.filter((s) => s.name).length;
     const parts = [
-      `${words} words`,
-      `${secs.filter((s) => s.name).length} sections`,
+      `${words} word${words === 1 ? "" : "s"}`,
+      `${named} section${named === 1 ? "" : "s"}`,
       budget ? `budget ${Math.floor(budget / 60)}:${String(budget % 60).padStart(2, "0")}` : "no budgets yet",
-      `≈ ${m}:${String(Math.round((est - m) * 60)).padStart(2, "0")} at ${rate ? `your median ${Math.round(rate)} wpm` : "140 wpm (estimate until you record a take)"}`,
+      `≈ ${Math.floor(estS / 60)}:${String(estS % 60).padStart(2, "0")} at ${rate ? `your median ${Math.round(rate)} wpm` : "140 wpm (estimate until you record a take)"}`,
     ];
     stats.textContent = parts.join("  ·  ");
+    if (cleared && ta.value) {
+      cleared = "";
+      clearBtn.textContent = "Clear";
+    }
     checkSettings();
     tour?.apply();
   };
@@ -186,7 +219,7 @@ export function renderEditor(root: HTMLElement): void {
       h("div", { class: "editor-main" },
         h("div", { class: "toolbar" },
           examplePick,
-          h("button", { class: "ghost-btn", type: "button", onClick: () => { ta.value = ""; state.setScript(""); refresh(); } }, "Clear"),
+          clearBtn,
           h("button", { class: "ghost-btn", type: "button", title: "Each slide becomes a section; its speaker notes become the lines. Nothing is uploaded anywhere but this app.", onClick: () => pptxInput.click() }, "Import from PowerPoint notes"),
           pptxInput,
           h("span", { class: "spacer" }),
@@ -204,7 +237,7 @@ export function renderEditor(root: HTMLElement): void {
         tour.el,
         h("h3", {}, "Marks"),
         h("p", { class: "muted small" }, "You set the targets. Nothing is judged against a universal norm unless you switch a preset on in Settings."),
-        h("dl", {}, ...CHEATSHEET.flatMap(([mark, meaning]) => [h("dt", {}, h("code", {}, mark)), h("dd", {}, meaning)])),
+        h("dl", {}, ...CHEATSHEET.flatMap(([mark], i) => [h("dt", {}, h("code", {}, mark)), meanings[i][0]])),
         h("p", { class: "muted small" }, "Put spaces around / and // so km/h stays a word. Blank lines are ignored; every other line is a script line."),
         h("button", { class: "linklike small", type: "button", onClick: () => tour?.restart() }, "Show the one-minute tour"),
       ),

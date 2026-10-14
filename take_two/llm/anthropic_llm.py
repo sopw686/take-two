@@ -21,7 +21,10 @@ class AnthropicLLM:
 
         self.model = model
         self.available = True
-        self._client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        # The SDK's defaults (10 min, 2 retries, timeouts retried) could stall the analysis queue for half an
+        # hour. 60 s still fits a whole-script Suggest marks answer; a slower call gives up and the caller falls back.
+        self._client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY,
+                                           timeout=anthropic.Timeout(60.0, connect=5.0), max_retries=1)
 
     def complete_structured(self, system: str, user: str, output: type[T], max_tokens: int = 16000) -> T | None:
         import anthropic

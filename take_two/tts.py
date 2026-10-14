@@ -75,13 +75,14 @@ def voices() -> list[dict]:
         if p == "kokoro":
             eng = neural_voice.ENGINE
             if not eng.installed():
-                reason = "the kokoro-onnx package is not installed (uv sync installs it)"
-            elif eng.state == "failed":
-                reason = eng.error
+                reason = (f"kokoro-onnx is installed but could not be loaded ({eng.import_error})" if eng.import_error
+                          else "the kokoro-onnx package is not installed (uv sync installs it)")
             else:
                 reason = None
             note = None
-            if eng.state == "downloading":
+            if eng.state == "failed":  # still offered: playing a line tries again (after neural_voice.RETRY_S)
+                note = f"the last attempt to prepare it failed ({eng.error}); playing a line tries again"
+            elif eng.state == "downloading":
                 note = f"downloading the voice model, {eng.progress:.0%} of {neural_voice.DOWNLOAD_MB} MB"
             elif eng.state != "ready" and not eng.files_present():
                 note = f"the first use downloads the voice model ({neural_voice.DOWNLOAD_MB} MB) from GitHub"
@@ -100,7 +101,7 @@ def voices() -> list[dict]:
             out.append({"id": "azure", "provider": "azure", "label": f"Azure Speech ({AZURE_VOICE}), cloud",
                         "local": False, "available": ok, "ready": True, "note": None,
                         "sends": f"the text of the line you play (script text, no audio) to Microsoft Azure Speech ({AZURE_REGION})",
-                        "reason": None if ok else "TAKE_TWO_TTS=azure needs AZURE_SPEECH_KEY and AZURE_SPEECH_REGION."})
+                        "reason": None if ok else "Azure Speech needs AZURE_SPEECH_KEY and AZURE_SPEECH_REGION."})
         elif p == "fake":
             out.append({"id": "fake", "provider": "fake", "label": "fake (development stand-in: tones in place of speech)",
                         "local": True, "sends": None, "available": True, "ready": True, "reason": None, "note": None})
@@ -148,17 +149,20 @@ def synthesize(plan: dict, voice_id: str | None = None) -> tuple[bytes, str, lis
             _cache.move_to_end(key)
             return _cache[key]
     provider, _, name = v["id"].partition(":")
-    if provider == "fake":
-        out = (fake_audio(plan), "audio/wav", _even_starts(plan, 16000))
-    elif provider == "kokoro":
-        audio, starts, _ = neural_voice.ENGINE.render(plan, name)
-        out = (neural_voice.wav_bytes(audio), "audio/wav", starts)
-    elif provider == "gemini":
-        out = gemini_render(plan, name)
-    elif provider == "azure":
-        out = (_azure(plan), "audio/mpeg", [])
-    else:
-        raise RuntimeError(f"Unknown voice {v['id']}.")
+    try:
+        if provider == "fake":
+            out = (fake_audio(plan), "audio/wav", _even_starts(plan, 16000))
+        elif provider == "kokoro":
+            audio, starts, _ = neural_voice.ENGINE.render(plan, name)
+            out = (neural_voice.wav_bytes(audio), "audio/wav", starts)
+        elif provider == "gemini":
+            out = gemini_render(plan, name)
+        elif provider == "azure":
+            out = (_azure(plan), "audio/mpeg", [])
+        else:
+            raise RuntimeError(f"Unknown voice {v['id']}.")
+    except (ValueError, TypeError, AttributeError, ArithmeticError) as exc:  # kokoro-onnx refusing the input, or a malformed plan
+        raise RuntimeError(f"The voice could not read this line ({exc}).") from exc
     with _cache_lock:
         _cache[key] = out
         while len(_cache) > CACHE_ITEMS:
@@ -167,9 +171,11 @@ def synthesize(plan: dict, voice_id: str | None = None) -> tuple[bytes, str, lis
 
 
 def warm_up() -> None:
-    """Prepare the local voice (download once, then load) so the first Hear it does not wait for it."""
+    """Prepare the local voice (download once, then load, then say one word: the first inference is the
+    slowest) so the first Hear it does not wait for it."""
     if "kokoro" in PROVIDERS and neural_voice.ENGINE.installed():
         neural_voice.ENGINE.load()
+        neural_voice.ENGINE.render({"segments": [{"text": "Ready."}]}, neural_voice.DEFAULT_VOICE["coach"])
 
 
 def _even_starts(plan: dict, sr: int) -> list:

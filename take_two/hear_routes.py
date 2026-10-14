@@ -53,6 +53,8 @@ def _median(take_id: str | None) -> tuple[float | None, str]:
             return (data.get("drill") or {}).get("parent_median_wpm"), "the full take this drill came from"
         if data.get("kind", "take") == "take" and b.get("median_wpm"):
             return b["median_wpm"], "this take"
+        if data.get("kind") == "example" and b.get("median_wpm"):
+            return b["median_wpm"], "this example take"
     wpm = takes.latest_median_wpm()
     return wpm, "your latest take"
 
@@ -68,7 +70,8 @@ def _coach_proposal(script, line, settings: Settings, ref: float, note: str) -> 
     user = delivery.coach_user_prompt(script, line, register, ref, note)
     key = hashlib.sha256(json.dumps([provider["label"], user, delivery.COACH_SYSTEM]).encode("utf-8")).hexdigest()
     if key not in _coach_cache:
-        out = llm.complete_structured(delivery.COACH_SYSTEM, user, delivery.CoachOutput, max_tokens=4000)
+        # Thinking counts toward max_tokens; the schema keeps the answer itself short.
+        out = llm.complete_structured(delivery.COACH_SYSTEM, user, delivery.CoachOutput, max_tokens=16000)
         if out is None:
             provider = {**provider, "reason": "The coach's model did not return a usable plan. Try again."}
             return None, provider

@@ -13,3 +13,4 @@ takes/*
 .claude/worktrees/
 
 frontend/.test-build/
+.playwright-mcp/

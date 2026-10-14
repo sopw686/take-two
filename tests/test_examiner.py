@@ -142,6 +142,8 @@ def test_closing_line_is_measured_and_never_grades():
     text = closing_line([a, a])
     assert text == ("You answered 2 questions. None stayed within your pace band, 2 were outside it. "
                     "The longest hesitation before an answer was 1 second.")
+    quick = {**a, "transcript": {"words": [{"start": 0.4}]}}
+    assert closing_line([quick]).endswith("The longest hesitation before an answer was under a second.")
     for t in (text, closing_line([{"improv": {"pace": {"status": "met"}}, "transcript": {"words": []}}])):
         low = t.lower()
         assert not any(g in low for g in GRADING) and "score" not in low and "streak" not in low

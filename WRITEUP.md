@@ -23,11 +23,11 @@ Marks describe intent, not a style, so the same few serve a lecture and a toast:
 
 ## How it's built
 
-FastAPI and TypeScript, running locally. faster-whisper transcribes with word timestamps; Silero's voice activity detector measures pauses from the audio. Pace is compared to your own median, not a fixed target. Audio stays on your computer unless you add a cloud key. The default voice is the browser's own. 345 Python and 18 frontend tests, a synthetic recording with known pauses through the full pipeline, and browser tests that record through Chrome's fake microphone.
+FastAPI and TypeScript, running locally. faster-whisper transcribes with word timestamps; Silero's voice activity detector measures pauses from the audio. Pace is compared to your own median, not a fixed target. Audio stays on your computer unless you add a cloud key. The default voice is Kokoro-82M, a neural voice running locally (the browser's voice is the fallback). 371 Python unit tests, 25 frontend tests, a synthetic recording with known pauses through the full pipeline, and browser tests that record through Chrome's fake microphone.
 
 ## AI tools: what I used and how
 
-I built it with Claude Code, in milestones, from a spec and product rules I wrote first (commits M1 to M17). In the app, Whisper and Silero handle audio. Claude handles optional features: suggesting marks, checking whether a term was explained, coaching notes, likely audience questions, the coach's version of a line, proposed pronunciations, and the examiner's follow-ups. It sees only text and numbers, never audio, and code checks its output, for example dropping any quote that isn't in the transcript. These have only been tested against a mocked model so far.
+I built it with Claude Code, in milestones, from a spec and product rules I wrote first (commits M1 to M18). In the app, Whisper and Silero handle audio. Claude handles optional features: suggesting marks, checking whether a term was explained, coaching notes, likely audience questions, the coach's version of a line, proposed pronunciations, and the examiner's follow-ups. It sees only text and numbers, never audio, and code checks its output, for example dropping any quote that isn't in the transcript. These have only been tested against a mocked model so far.
 
 ## What's next
 

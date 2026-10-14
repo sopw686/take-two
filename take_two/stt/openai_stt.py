@@ -22,6 +22,9 @@ class OpenAITranscriber:
         self.model_name = model
         self.device = "cloud"
 
+    def load(self) -> None:
+        """Nothing to load: the model runs in the cloud (the startup warm-up calls this)."""
+
     def describe(self) -> dict:
         return {"backend": self.name, "model": self.model_name, "device": "cloud", "loaded": True, "local": False}
 

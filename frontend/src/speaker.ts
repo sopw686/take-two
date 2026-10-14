@@ -55,12 +55,21 @@ export function voicesReady(ms = 1500): Promise<void> {
   });
 }
 
-export function onVoicesChanged(fn: () => void): void {
+export function onVoicesChanged(fn: () => void): () => void {
   synth()?.addEventListener("voiceschanged", fn);
+  return () => synth()?.removeEventListener("voiceschanged", fn);
+}
+
+/** The browser voice a role speaks with: the speaker's pick if loaded, else the default English one. */
+function browserVoice(role: Role): SpeechSynthesisVoice | null {
+  const want = read(VOICE_KEY(role));
+  const vs = browserVoices();
+  return vs.find((v) => v.voiceURI === want) ?? vs.find((v) => v.default && v.lang.startsWith("en")) ?? vs[0] ?? null;
 }
 
 /** Which voice a role uses: the speaker's pick if it still exists, else the server's default for the role
- *  (a local voice, never a cloud one), else the browser's voice. */
+ *  (a local voice, never a cloud one), else the browser's voice. A browser pick that is gone from the browser
+ *  (once its voices have loaded) is not a choice any more. */
 function resolve(role: Role): { server: ServerVoice | null; explicit: boolean } {
   const pick = read(VOICE_KEY(role));
   const vs = serverVoices();
@@ -70,8 +79,9 @@ function resolve(role: Role): { server: ServerVoice | null; explicit: boolean } 
   } else if (pick === "server") {  // the choice from before there was more than one server voice
     const v = vs.find((x) => x.local) ?? vs[0];
     if (v) return { server: v, explicit: true };
-  } else if (pick) {  // a browser voice; it may not be loaded yet, and BrowserSpeaker falls back to the default one
-    return { server: null, explicit: true };
+  } else if (pick) {  // a browser voice; it may not be loaded yet
+    const bv = browserVoices();
+    if (!bv.length || bv.some((v) => v.voiceURI === pick)) return { server: null, explicit: true };
   }
   const def = state.health?.tts?.default?.[role];
   return { server: vs.find((x) => x.id === def) ?? null, explicit: false };
@@ -99,11 +109,7 @@ class BrowserSpeaker implements Speaker {
     const v = this.voice();
     return `browser voice${v ? `: ${v.name}` : ""} (on this computer)`;
   }
-  private voice(): SpeechSynthesisVoice | null {
-    const want = read(VOICE_KEY(this.role));
-    const vs = browserVoices();
-    return vs.find((v) => v.voiceURI === want) ?? vs.find((v) => v.default && v.lang.startsWith("en")) ?? vs[0] ?? null;
-  }
+  private voice(): SpeechSynthesisVoice | null { return browserVoice(this.role); }
   available() {
     const s = synth();
     if (!s) return { ok: false, reason: "This browser has no speech synthesis, so the plan is shown as text only." };
@@ -224,7 +230,8 @@ class ServerSpeaker implements Speaker {
     const tick = () => {
       let i = -1;
       got.starts.forEach((s, k) => { if (s !== null && s <= a.currentTime + 0.05) i = k; });
-      if (i === -1 && got.starts.length) i = got.starts.findIndex((s) => s !== null);
+      // No timings (a cloud voice returns none): highlight the first segment, so the line shows as playing.
+      if (i === -1) i = Math.max(0, got.starts.findIndex((s) => s !== null));
       if (i !== current) { current = i; emitSegment(i); }
     };
     a.addEventListener("timeupdate", tick);
@@ -312,8 +319,9 @@ export function voicePicker(role: Role, label: string): HTMLElement {
       ? bv.map((v) => h("option", { value: v.voiceURI }, `${v.name} (${v.lang}${v.localService ? "" : ", online voice"})`))
       : [h("option", { value: "" }, synth() ? "Browser voice (none loaded yet)" : "No browser voice")];
     sel.append(h("optgroup", { label: "Browser voices" }, ...browserOpts));
+    // Show the voice that will actually speak: a server voice, or the browser voice BrowserSpeaker would use.
     const { server } = resolve(role);
-    const want = server ? SERVER + server.id : read(VOICE_KEY(role)) ?? "";
+    const want = server ? SERVER + server.id : browserVoice(role)?.voiceURI ?? "";
     sel.value = [...sel.options].some((o) => o.value === want) ? want : sel.options[0]?.value ?? "";
     const chosenServer = vs.find((v) => SERVER + v.id === sel.value);
     const chosenBrowser = bv.find((v) => v.voiceURI === sel.value);
@@ -339,6 +347,12 @@ export function voicePicker(role: Role, label: string): HTMLElement {
     sel.dispatchEvent(new CustomEvent("voicechange", { bubbles: true }));
   });
   fill();
-  onVoicesChanged(fill);
+  // Refill when the browser's voices arrive; once the picker has been shown and removed, stop listening.
+  let shown = false;
+  const off = onVoicesChanged(() => {
+    if (!sel.isConnected && shown) { off(); return; }
+    shown ||= sel.isConnected;
+    fill();
+  });
   return h("label", { class: "small voice-label" }, `${label} `, sel, note);
 }

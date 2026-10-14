@@ -27,9 +27,10 @@ export function esc(s: string): string {
 
 export function fmtTime(s: number | null | undefined): string {
   if (s === null || s === undefined || Number.isNaN(s)) return "–";
-  const m = Math.floor(s / 60);
-  const sec = s - m * 60;
-  return m > 0 ? `${m}:${sec.toFixed(0).padStart(2, "0")}` : `${sec.toFixed(1)} s`;
+  if (s < 59.95) return `${s.toFixed(1)} s`;
+  // Round to whole seconds before splitting, so 119.6 is 2:00, not 1:60.
+  const t = Math.round(s);
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
 }
 
 export function fmtClock(s: number): string {

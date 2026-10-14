@@ -19,7 +19,7 @@ from take_two import pipeline, takes
 log = logging.getLogger(__name__)
 
 KEEP_FINISHED = 50
-_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="marked-job")
+_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="take-two-job")
 _jobs: dict[str, dict] = {}
 _finished: list[str] = []
 _lock = threading.Lock()

@@ -10,7 +10,7 @@ import { fmtClock, h } from "./dom";
 import { announce, initial, step, type SessionEvent, type SessionState } from "./examinerMachine";
 import { Recorder, showLevel } from "./recorder";
 import { textPlan } from "./schedule";
-import { silenceDetector } from "./silence";
+import { silenceDetector, type Detector } from "./silence";
 import { getSpeaker, stopAll, voicePicker, voicesReady } from "./speaker";
 import { state } from "./state";
 import type { ImprovAnalysis, Question, Settings } from "./types";
@@ -158,7 +158,11 @@ function runSession(root: HTMLElement, questions: Question[], goToReport: () => 
   const when = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   let s: SessionState = initial();
   let rec: Recorder | null = null;
+  let det: Detector | null = null;
   let timer = 0;
+  let pending: Promise<unknown> = Promise.resolve();  // the answer being measured; the closing line waits for it
+  let measuring = false;
+  let prefetched = false;
   let lastTake: string | null = null;  // the answer a follow-up is about
   const done: { take_id: string; label: string }[] = [];
 
@@ -175,12 +179,11 @@ function runSession(root: HTMLElement, questions: Question[], goToReport: () => 
   const repeatBtn = btn("Hear again", "R", "repeat");
   const skipBtn = btn("Skip", "S", "skip");
   const endBtn = h("button", { class: "primary", type: "button", onClick: () => dispatch({ type: "abort" }) }, "End session ", h("kbd", {}, "Esc"));
+  const meter = h("div", { class: "meter" }, h("div", { class: "meter-track" }, h("div", { class: "meter-baseline" }), meterBar), meterLabel);
+  const actions = h("div", { class: "live-actions" }, doneBtn, repeatBtn, skipBtn, endBtn);
   const panel = h("section", { class: "card examiner-live" },
     h("div", { class: "topic-head" }, h("h3", {}, "Spoken examiner"), progress),
-    qText, say, clock,
-    h("div", { class: "meter" }, h("div", { class: "meter-track" }, h("div", { class: "meter-baseline" }), meterBar), meterLabel),
-    h("div", { class: "live-actions" }, doneBtn, repeatBtn, skipBtn, endBtn),
-    answers);
+    qText, say, clock, meter, actions, answers);
   root.replaceChildren(panel);
 
   const onKey = (e: KeyboardEvent) => {
@@ -195,8 +198,6 @@ function runSession(root: HTMLElement, questions: Question[], goToReport: () => 
   document.addEventListener("keydown", onKey);
   document.addEventListener("keyup", onKey);  // a focused button would act on Space at keyup
 
-  // A local voice renders every question while the first is being asked, so none waits for the voice.
-  for (const q of questions) getSpeaker("examiner").prefetch(textPlan(q.text));
   const question = () => questions[s.index];
   const spoken = () => s.followup ?? question().text;
 
@@ -207,7 +208,12 @@ function runSession(root: HTMLElement, questions: Question[], goToReport: () => 
     // Leaving a phase: silence the voice, stop the countdown, close or discard the microphone as needed.
     if (before.phase === "asking") getSpeaker("examiner").stop();
     window.clearInterval(timer);
-    if (before.phase === "recording" && s.phase !== "analyzing") { rec?.cancel(); rec = null; }
+    if (before.phase === "recording" && s.phase !== "analyzing") {
+      // Esc mid-answer keeps what was said; a skip, or Esc before any speech, throws it away.
+      if (rec && s.phase === "done" && det?.spoke) pending = measure(before, rec).catch(() => undefined);
+      else rec?.cancel();
+      rec = null;
+    }
     render();
     void enter(before);
   }
@@ -237,6 +243,11 @@ function runSession(root: HTMLElement, questions: Question[], goToReport: () => 
           say.textContent = `The examiner's voice stopped working: ${(err as Error).message}`;
           return;
         }
+        // A local voice renders the other questions once the first is out, so the first never queues behind them.
+        if (!prefetched) {
+          prefetched = true;
+          for (const q of questions.slice(1)) getSpeaker("examiner").prefetch(textPlan(q.text));
+        }
         if (still()) dispatch({ type: "spoken" });
         return;
       }
@@ -257,15 +268,17 @@ function runSession(root: HTMLElement, questions: Question[], goToReport: () => 
         stopAll();  // never record a voice
         const r = new Recorder();
         rec = r;
-        const det = silenceDetector({ silenceS: settings.examiner_silence_s, maxS: settings.examiner_max_answer_s });
-        const t0 = performance.now();
+        const d = silenceDetector({ silenceS: settings.examiner_silence_s, maxS: settings.examiner_max_answer_s });
+        det = d;
+        let t0: number | null = null;  // the first level frame: opening the microphone is not part of the answer
         try {
           await r.start((db) => {
             showLevel(db, meterBar, meterLabel, state.calibration?.baseline_db ?? null);
             if (!still()) return;
+            t0 ??= performance.now();
             const t = (performance.now() - t0) / 1000;
             clock.textContent = fmtClock(Math.floor(t));
-            const v = det.feed(t, db);
+            const v = d.feed(t, db);
             if (v !== "listening") dispatch({ type: "answered" });
           });
         } catch (err) {
@@ -282,34 +295,18 @@ function runSession(root: HTMLElement, questions: Question[], goToReport: () => 
         const r = rec;
         rec = null;
         if (!r) return;
-        const { blob, filename } = await r.stop();
-        const q = before.followup ? { text: before.followup } : question();
-        const label = `Examiner ${when} · ${before.followup ? `follow-up to Q${before.index + 1}` : `Q${before.index + 1}`}`;
-        const host = h("div", { class: "run-panel" });
-        const row = h("div", { class: "examiner-answer" }, h("strong", {}, label), h("div", { class: "small muted" }, q.text), host);
-        answers.prepend(row);
-        let result: ImprovAnalysis | null = null;
-        const ok = await runAnalysis<ImprovAnalysis>({
-          host, blob, filename,
-          message: `Measuring your answer on this computer (${state.health?.stt.model ?? "local model"})…`,
-          start: () => api.startImprovJob(blob, filename, q.text, null, false, settings, label, q,
-            { id: sessionId, index: before.index, total: before.total, followup_of: before.followup ? lastTake : null }),
-          retry: (id) => api.startRetryJob(id, { settings }),
-          open: (a) => { result = a; },
-          goToReport: () => undefined,
-        });
-        const a = result as ImprovAnalysis | null;
-        if (!ok || !a) { if (still()) dispatch({ type: "failed" }); return; }
-        done.push({ take_id: a.take_id, label });
-        host.replaceChildren(h("span", { class: "small muted" }, a.summary[0] ?? ""), " ", openLink(a.take_id, goToReport));
+        const work = measure(before, r);
+        pending = work.catch(() => undefined);
+        const m = await work;
+        if (!m) { if (still()) dispatch({ type: "failed" }); return; }
         let followup: string | null = null;
-        if (!before.followup) {
-          lastTake = a.take_id;
+        if (!before.followup && still()) {  // none once the session has ended
+          lastTake = m.a.take_id;
           try {
-            const f = await api.followup(a.take_id, state.scriptText);
+            const f = await api.followup(m.a.take_id, state.scriptText);
             followup = f.followup?.text ?? null;
-            if (!f.followup && f.reason) host.append(h("div", { class: "small muted" }, f.reason));
-            if (f.followup?.provider?.includes("fake")) host.append(h("div", { class: "small muted" }, "Follow-up from the fake development stand-in, not a model."));
+            if (!f.followup && f.reason) m.host.append(h("div", { class: "small muted" }, f.reason));
+            if (f.followup?.provider?.includes("fake")) m.host.append(h("div", { class: "small muted" }, "Follow-up from the fake development stand-in, not a model."));
           } catch { /* no follow-up; the session goes on */ }
         }
         if (still()) dispatch({ type: "analyzed", followup });
@@ -320,7 +317,11 @@ function runSession(root: HTMLElement, questions: Question[], goToReport: () => 
         document.removeEventListener("keyup", onKey);
         live = null;
         clock.textContent = "";
-        meterLabel.textContent = "";
+        meter.remove();
+        actions.remove();
+        // An answer still being measured belongs in the closing line.
+        if (measuring) say.textContent = `${announce(s)} Measuring your last answer…`;
+        await pending;
         let closing = "";
         try {
           closing = (await api.examinerSession(sessionId, s.skipped)).closing;
@@ -328,13 +329,43 @@ function runSession(root: HTMLElement, questions: Question[], goToReport: () => 
           closing = `The session's answers could not be read back: ${(err as Error).message}`;
         }
         qText.textContent = closing;
-        say.textContent = s.aborted ? `Session ended. ${closing}` : `Session complete. ${closing}`;
+        say.textContent = announce(s);
         panel.append(h("p", {}, h("button", { class: "ghost-btn", type: "button", onClick: () => { stopAll(); void import("./improvise").then((m) => m.renderImprovise(root, goToReport)); } }, "New session")));
-        if (done.length) {
+        if (done.length && panel.isConnected) {
           try { await getSpeaker("examiner").speak(textPlan(closing)); } catch { /* the text is on screen */ }
         }
         return;
       }
+    }
+  }
+
+  /** Send one answer (recorded in state `before`) for analysis and show it in the list; null when it failed. */
+  async function measure(before: SessionState, r: Recorder): Promise<{ a: ImprovAnalysis; host: HTMLElement } | null> {
+    measuring = true;
+    try {
+      const { blob, filename } = await r.stop();
+      const q = before.followup ? { text: before.followup } : questions[before.index];
+      const label = `Examiner ${when} · ${before.followup ? `follow-up to Q${before.index + 1}` : `Q${before.index + 1}`}`;
+      const host = h("div", { class: "run-panel" });
+      const row = h("div", { class: "examiner-answer" }, h("strong", {}, label), h("div", { class: "small muted" }, q.text), host);
+      answers.prepend(row);
+      let result: ImprovAnalysis | null = null;
+      const ok = await runAnalysis<ImprovAnalysis>({
+        host, blob, filename,
+        message: `Measuring your answer on this computer (${state.health?.stt.model ?? "local model"})…`,
+        start: () => api.startImprovJob(blob, filename, q.text, null, false, settings, label, q,
+          { id: sessionId, index: before.index, total: before.total, followup_of: before.followup ? lastTake : null }),
+        retry: (id) => api.startRetryJob(id, { settings }),
+        open: (a) => { result = a; },
+        goToReport: () => undefined,
+      });
+      const a = result as ImprovAnalysis | null;
+      if (!ok || !a) return null;
+      done.push({ take_id: a.take_id, label });
+      host.replaceChildren(h("span", { class: "small muted" }, a.summary[0] ?? ""), " ", openLink(a.take_id, goToReport));
+      return { a, host };
+    } finally {
+      measuring = false;
     }
   }
 

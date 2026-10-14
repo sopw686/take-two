@@ -4,7 +4,7 @@ import { drillButton, openDrill, stopDrill } from "./drill";
 import { closeHear, hearButton, sayWord } from "./hearit";
 import { parseScript, sayings } from "./scriptinfo";
 import { describeOverrides } from "./editor";
-import { play as playAt, player } from "./player";
+import { play as playAt, player, stopSegment } from "./player";
 import { state } from "./state";
 import { glyphParts, statusChip, statusGlyph, statusTone } from "./status";
 import { exampleButton, exportReport } from "./takes";
@@ -15,7 +15,14 @@ const DIFF_KEY = "taketwo.report.diff";
 
 // The recording this report belongs to: every click plays it, even if a drill or a comparison loaded another.
 let reportUrl = "";
-const play = (at: number | null | undefined) => playAt(at, reportUrl);
+const play = (at: number | null | undefined, until?: number | null) => playAt(at, reportUrl, until);
+const plus = (t: number | null | undefined, s: number) => (t === null || t === undefined ? null : t + s);
+
+// Esc stops the take while a report is on screen (one listener for the page; reportStop is the current report's Stop).
+let reportStop: HTMLElement | null = null;
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && reportStop?.isConnected && !player().paused) stopSegment();
+});
 
 function showDiff(): boolean {
   try { return localStorage.getItem(DIFF_KEY) === "1"; } catch { return false; }
@@ -62,7 +69,7 @@ function sectionBars(a: Analysis): HTMLElement {
         : s.status === "no_lines" ? "no script lines, so nothing to time"
         : s.status === "no_budget" ? `${s.duration_label} spoken, no budget set`
         : `${s.duration_label} spoken of ${s.budget_label} budget · ${s.delta_label} · ${word(s.status)}`;
-      return h("div", { class: "section-bar", onClick: () => play(s.start) },
+      return h("div", { class: "section-bar", onClick: () => play(s.start, plus(s.end, 0.3)) },
         h("div", { class: "section-bar-head" }, h("strong", {}, s.name),
           h("span", { class: "muted small" }, s.status !== "no_budget" && s.status !== "no_lines" ? glyphParts(s.status, word(s.status)) : null, label)),
         h("div", { class: "bar-track" },
@@ -126,7 +133,8 @@ function lineEl(a: Analysis, line: LineRow, diff: boolean): HTMLElement {
     const t = e.target as HTMLElement;
     const ws = t.closest("[data-start]") as HTMLElement | null;
     const start = ws?.dataset.start ? parseFloat(ws.dataset.start) : line.start;
-    play(start);
+    // Just this line, from the word clicked; a few seconds for something said after its last word.
+    play(start, line.end !== null && start !== null && start < line.end ? line.end + 0.3 : plus(start, 3));
   });
   return el;
 }
@@ -134,15 +142,18 @@ function lineEl(a: Analysis, line: LineRow, diff: boolean): HTMLElement {
 /** Hear it for a line of this take: its own script and median; Try it opens that line's drill. Accepting the coach's
  *  marks writes them into the Script tab's script only when that script is this take's script. */
 function hearOpts(a: Analysis, lineIndex: number, anchor: () => HTMLElement) {
-  const same = () => {
-    const mine = parseScript(state.scriptText).lines;
-    return mine.length === a.lines.length && mine.every((l, i) => l.parts.filter((p) => p.kind === "word").length === a.lines[i].word_count);
-  };
+  const same = () => sameScript(a);
   return {
     lineIndex, script: () => null, takeId: a.take_id,
     tryIt: canDrill(a) ? () => openDrill(a, "line", lineIndex, `line ${lineIndex + 1}`, anchor()) : "A try is judged against one of your own full takes; the example is a synthetic voice.",
     onScriptChange: same() ? (text: string) => state.setScript(text) : undefined,
   };
+}
+
+/** Whether the Script tab holds this take's script: the same lines with the same word counts (marks may differ). */
+function sameScript(a: Analysis): boolean {
+  const mine = parseScript(state.scriptText).lines;
+  return mine.length === a.lines.length && mine.every((l, i) => l.parts.filter((p) => p.kind === "word").length === a.lines[i].word_count);
 }
 
 /** Words the recognizer was unsure of, or heard as another word: measured, with what to do about each. */
@@ -155,7 +166,7 @@ function clarityCard(a: Analysis): HTMLElement | null {
     let li: HTMLElement = h("li");
     const resp = sayings(state.scriptText).get(w.word.toLowerCase()) ?? null;
     li = h("li", {},
-      h("button", { class: "linklike", type: "button", title: "Hear this moment of your take", onClick: () => play(w.start) }, fmtTime(w.start)),
+      h("button", { class: "linklike", type: "button", title: "Hear this moment of your take", onClick: () => play(w.start - 1, w.end + 1) }, fmtTime(w.start)),
       " ", w.text, " ",
       h("button", { class: "ghost-btn small", type: "button", title: resp ? `Said as ${resp} (your [SAY] mark), slowly, then at an ordinary pace` : "The word said slowly, then at an ordinary pace",
         onClick: () => sayWord(w.word, resp, (m) => { status.textContent = m; }) }, "Hear it"),
@@ -165,7 +176,14 @@ function clarityCard(a: Analysis): HTMLElement | null {
           try {
             await api.dismissClarity(w.word);
             li.replaceChildren(h("span", { class: "muted small" }, `“${w.word}”: you said it fine. It is left out from now on. `),
-              h("button", { class: "linklike small", type: "button", onClick: async () => { await api.dismissClarity(w.word, false); li.replaceWith(row(w)); } }, "Undo"));
+              h("button", { class: "linklike small", type: "button", onClick: async () => {
+                try {
+                  await api.dismissClarity(w.word, false);
+                  li.replaceWith(row(w));
+                } catch (err) {
+                  status.textContent = `Could not undo that: ${(err as Error).message}`;
+                }
+              } }, "Undo"));
           } catch (err) {
             status.textContent = `Could not save that: ${(err as Error).message}`;
           }
@@ -201,7 +219,7 @@ function drillCard(a: Analysis, openParent: (id: string) => void): HTMLElement |
 }
 
 function pauseChip(p: PauseRow): HTMLElement {
-  return statusChip(p.status, p.kind, { tip: pauseTip(p), extraClass: "pause", onClick: (e) => { e.stopPropagation(); play(p.at_time); } });
+  return statusChip(p.status, p.kind, { tip: pauseTip(p), extraClass: "pause", onClick: (e) => { e.stopPropagation(); play(plus(p.at_time, -1.5), plus(p.at_time, Math.max(p.measured_s ?? 0, p.target_s) + 1.5)); } });
 }
 
 function defineChip(d: DefineRow): HTMLElement {
@@ -214,7 +232,12 @@ function defineChip(d: DefineRow): HTMLElement {
   else tip = d.note ?? st;
   return statusChip(st, `DEFINE: ${d.term}${d.method === "heuristic" ? " (heuristic)" : d.method === "llm" ? " (LLM)" : ""}`, {
     tip, extraClass: "define", word: st === "defined" ? "defined" : st === "undefined" ? "not defined first" : st === "never_spoken" ? "never spoken" : undefined,
-    onClick: (e) => { e.stopPropagation(); play(d.evidence?.start ?? d.first_spoken_at ?? null); } });
+    onClick: (e) => {
+      e.stopPropagation();
+      const ev = d.evidence;
+      const at = ev?.start ?? d.first_spoken_at ?? null;
+      play(at, ev && ev.start !== null && ev.end !== null ? ev.end + 0.3 : plus(at, 3));
+    } });
 }
 
 function summaryCard(a: Analysis): HTMLElement {
@@ -225,7 +248,8 @@ function summaryCard(a: Analysis): HTMLElement {
       a.baseline.median_source && a.baseline.median_source !== "this take"
         ? `Median from ${a.baseline.median_source}: ${a.baseline.median_wpm?.toFixed(0) ?? "none"} wpm (a drill has no median of its own); median pause in this recording ${a.baseline.median_pause_s?.toFixed(2) ?? "–"} s. `
         : `Your median this take: ${a.baseline.median_wpm?.toFixed(0) ?? "–"} wpm over ${a.baseline.lines_used} lines of ${a.baseline.min_words_per_line}+ words; median pause ${a.baseline.median_pause_s?.toFixed(2) ?? "–"} s. `,
-      `Transcribed ${a.stt.local ? "on this computer" : "by a cloud service"} with ${a.stt.model} (${a.stt.device}); pauses measured with ${a.silence_method}. Click any line or mark to hear it.`),
+      a.kind === "example" ? "No speech-to-text ran: the example uses its committed transcript" : `Transcribed ${a.stt.local ? "on this computer" : "by a cloud service"} with ${a.stt.model} (${a.stt.device})`,
+      `; pauses measured with ${a.silence_method}. Click any line or mark to hear it; Esc stops it.`),
     a.settings_from_script && Object.keys(a.settings_from_script).length
       ? h("p", { class: "muted small" }, `From the script's settings line: ${describeOverrides(a.settings_from_script)}. Every other threshold is from Settings.`)
       : null);
@@ -291,7 +315,7 @@ function coachingCard(a: Analysis, onRefresh: () => void): HTMLElement {
 
 function transcriptCard(a: Analysis): HTMLElement {
   const det = h("details", { class: "card" }, h("summary", {}, "Transcript and raw timings"),
-    h("p", { class: "transcript" }, ...a.transcript.words.map((w) => h("span", { class: "w", onClick: () => play(w.start), title: `${w.start.toFixed(2)}–${w.end.toFixed(2)} s` }, w.text + " "))),
+    h("p", { class: "transcript" }, ...a.transcript.words.map((w) => h("span", { class: "w", onClick: () => play(w.start, w.start + 4), title: `${w.start.toFixed(2)}–${w.end.toFixed(2)} s` }, w.text + " "))),
     h("p", { class: "muted small" }, `${a.timing.stt_s !== undefined ? `Analysis took ${a.timing.stt_s} s of transcription.`
       : a.kind === "example" ? "No speech-to-text ran for this take: it uses the example's committed transcript."
       : "Transcription time was not recorded for this take."} Every number in this report comes from these timestamps; the full JSON is at `,
@@ -318,18 +342,27 @@ export function renderReport(root: HTMLElement): void {
   const rerender = () => renderReport(root);
   const headStatus = h("p", { class: "small warn", role: "status" });
   const isDrill = a.kind === "drill";
+  // The Script tab's script is used only when it is this take's script (marks may differ); otherwise, and for a
+  // drill (its own one-line script), the take keeps its script and only the settings change.
+  const withScript = !isDrill && sameScript(a);
   const reanalyzeBtn = h("button", { class: "ghost-btn", type: "button", onClick: async () => {
     reanalyzeBtn.setAttribute("disabled", "");
     headStatus.textContent = "";
     try {
-      // A drill keeps its own one-line script; only the settings change.
-      state.setAnalysis(await api.reanalyze(a.take_id, isDrill ? null : state.scriptText, state.effectiveSettings()));
+      state.setAnalysis(await api.reanalyze(a.take_id, withScript && sameScript(a) ? state.scriptText : null, state.effectiveSettings()));
       rerender();
     } catch (err) {
       headStatus.textContent = `Re-analysis failed: ${(err as Error).message}`;
       reanalyzeBtn.removeAttribute("disabled");
     }
-  } }, isDrill ? "Re-analyze with current settings" : "Re-analyze with current script and settings") as HTMLButtonElement;
+  } }, withScript ? "Re-analyze with current script and settings" : "Re-analyze with current settings") as HTMLButtonElement;
+  reanalyzeBtn.title = withScript ? "Re-measure this take against the script on your Script tab, with the current settings."
+    : isDrill ? "Re-measure this drill with the current settings."
+    : "Your Script tab holds a different script, so this take keeps the script it was recorded with; only the settings change.";
+  const stopBtn = h("button", { class: "ghost-btn", type: "button", title: "Stop playing the take (Esc)", disabled: p.paused,
+    onClick: () => stopSegment() }, "■ Stop") as HTMLButtonElement;
+  p.onplay = p.onpause = p.onended = () => { stopBtn.disabled = p.paused; };
+  reportStop = stopBtn;
 
   // Takes analyzed before the comparison existed have no ad-lib data: say so instead of implying nothing differs.
   const compared = a.lines.some((l) => l.words_differ !== undefined);
@@ -344,7 +377,7 @@ export function renderReport(root: HTMLElement): void {
   const totalDiffer = a.lines.reduce((n, l) => n + (l.words_differ ?? 0), 0);
 
   const scriptEl = h("div", { class: "script-report" }, ...a.sections.flatMap((s) => {
-    const head: HTMLElement = h("h2", { class: "section-head", onClick: () => play(s.start) }, s.name,
+    const head: HTMLElement = h("h2", { class: "section-head", onClick: () => play(s.start, plus(s.end, 0.3)) }, s.name,
       h("span", { class: "muted small" }, s.status === "no_lines" ? " no script lines"
         : s.budget_label ? ` ${s.budget_label} budget · ${s.duration_label || "not found"} spoken` : ` ${s.duration_label || "not found"} spoken`),
       canDrill(a) && s.line_end > s.line_start ? drillButton(a, "section", s.index, `section ${s.name}`, () => head) : null);
@@ -354,13 +387,17 @@ export function renderReport(root: HTMLElement): void {
   const legend = h("div", { class: "legend muted small" },
     statusChip("met", "met your mark"), statusChip("near", "close"), statusChip("diverged", "diverged"), statusChip("unknown", "not measured"),
     " · hover, focus or click a mark for the numbers · click a line to hear it",
-    compared ? h("label", { class: "diff-toggle" }, diffToggle, ` What you said vs. the script${totalDiffer ? ` (${totalDiffer} words differ)` : ""}`)
+    compared ? h("label", { class: "diff-toggle" }, diffToggle, ` What you said vs. the script${totalDiffer ? ` (${totalDiffer} word${totalDiffer === 1 ? "" : "s"} differ${totalDiffer === 1 ? "s" : ""})` : ""}`)
       : h("span", { class: "diff-toggle" }, "Re-analyze to compare what you said with the script (this take predates it)."));
   const diffLegend = diff ? h("p", { class: "legend muted small" },
     h("span", { class: "w dropped" }, "struck"), " = in the script, not heard · ", h("span", { class: "adlib" }, "boxed"), " = said, not in the script · ",
     h("span", { class: "w misheard" }, "dotted"), " = heard as a similar word (hover to see it)") : null;
 
-  const tl = timelineStrip(a, (t) => play(t));
+  // The timeline plays from that moment to the end of the line spoken there, or a few seconds.
+  const tl = timelineStrip(a, (t) => {
+    const l = a.lines.find((x) => x.start !== null && x.end !== null && t >= x.start && t < x.end);
+    play(t, Math.max(t + 3, plus(l?.end, 0.3) ?? 0));
+  });
   root.append(
     h("div", { class: "report-head" },
       h("div", {}, h("h2", {}, a.kind === "example" ? h("span", { class: "mode-badge", title: "A text-to-speech recording shipped with the app, not a person" }, "Example · synthetic voice") : null,
@@ -368,11 +405,18 @@ export function renderReport(root: HTMLElement): void {
       h("div", { class: "take-actions" },
         h("button", { class: "ghost-btn", type: "button", title: "One HTML file with the recording inside: every number and tooltip printed, click a line to hear it. Works offline.",
           onClick: () => exportReport(a.take_id, (msg) => { headStatus.textContent = msg; }) }, "Export report"),
-        reanalyzeBtn)),
+        reanalyzeBtn, stopBtn)),
     headStatus,
     h("section", { class: "card timeline-card" }, tl.el,
       h("p", { class: "muted small" }, "Top band: silences found by the voice-activity detector. Bars: when each script line was spoken (key lines coloured by status). Ticks: where each mark was measured. Click or use ←/→ to hear that moment.")),
-    drillCard(a, async (id) => { state.setTake(await api.getAnyTake(id)); rerender(); }) ?? "",
+    drillCard(a, async (id) => {
+      try {
+        state.setTake(await api.getAnyTake(id));
+        rerender();
+      } catch (err) {
+        headStatus.textContent = `Could not open the full take: ${(err as Error).message}`;
+      }
+    }) ?? "",
     summaryCard(a),
     focusCard(a) ?? "",
     h("section", { class: "card" }, h("h3", {}, "Sections: budget vs. spoken"), sectionBars(a)),

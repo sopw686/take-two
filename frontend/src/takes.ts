@@ -232,6 +232,14 @@ export async function renderTakes(root: HTMLElement, openReport: () => void): Pr
     }
   }
   const currentId = state.current === "improv" ? state.improv?.take_id : state.analysis?.take_id;
+  const open = async (id: string) => {
+    try {
+      state.setTake(await api.getAnyTake(id));
+      openReport();
+    } catch (err) {
+      errLine.textContent = `Could not open that take: ${(err as Error).message}`;
+    }
+  };
   const byId = new Map(takes.map((t) => [t.take_id, t]));
   const drillsOf = (id: string) => takes.filter((t) => t.kind === "drill" && t.drill_of === id);
   root.append(
@@ -241,19 +249,13 @@ export async function renderTakes(root: HTMLElement, openReport: () => void): Pr
     h("ul", { class: "take-list" }, ...takes.filter((t) => !(t.kind === "drill" && t.drill_of && byId.has(t.drill_of))).map((t) => (t.status ?? "done") !== "done" ? unfinishedItem(t, root, openReport) : h("li", { class: currentId === t.take_id ? "current" : "" },
       t.mode === "improv" ? h("span", { class: "mode-badge" }, "Improvise") : null,
       t.kind === "example" ? h("span", { class: "mode-badge" }, "Example") : null,
-      h("button", { class: "linklike", type: "button", onClick: async () => {
-        state.setTake(await api.getAnyTake(t.take_id));
-        openReport();
-      } }, takeTitle(t)),
-      h("span", { class: "muted small" }, ` ${new Date(t.created_at).toLocaleString()} · ${fmtTime(t.duration_s)}${t.stt?.model ? ` · ${t.stt.model}` : ""}`),
+      h("button", { class: "linklike", type: "button", onClick: () => open(t.take_id) }, takeTitle(t)),
+      h("span", { class: "muted small" }, ` ${new Date(t.created_at).toLocaleString()} · ${fmtTime(t.duration_s)}${t.kind === "example" ? " · committed transcript" : t.stt?.model ? ` · ${t.stt.model}` : ""}`),
       manageActions(t, () => void renderTakes(root, openReport), (msg) => { errLine.textContent = msg; }),
       h("ul", { class: "small" }, ...(t.summary ?? []).map((s) => h("li", {}, s))),
       drillsOf(t.take_id).length ? h("ul", { class: "drill-list small" }, ...drillsOf(t.take_id).map((d) => (d.status ?? "done") !== "done" ? unfinishedItem(d, root, openReport) : h("li", {},
         h("span", { class: "mode-badge" }, "Drill"),
-        h("button", { class: "linklike small", type: "button", onClick: async () => {
-          state.setTake(await api.getAnyTake(d.take_id));
-          openReport();
-        } }, d.label || "Drill"),
+        h("button", { class: "linklike small", type: "button", onClick: () => open(d.take_id) }, d.label || "Drill"),
         h("span", { class: "muted" }, ` ${new Date(d.created_at).toLocaleString()}${d.status && d.status !== "done" ? " · not analyzed" : ""}`),
         manageActions(d, () => void renderTakes(root, openReport), (msg) => { errLine.textContent = msg; })))) : null))),
   );

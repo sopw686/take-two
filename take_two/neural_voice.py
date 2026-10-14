@@ -26,6 +26,7 @@ import logging
 import os
 import re
 import threading
+import time
 import wave
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,6 +37,7 @@ from take_two.config import MODELS_DIR
 from take_two.shaping import Shape, Span, shape
 
 log = logging.getLogger(__name__)
+logging.getLogger("phonemizer").setLevel(logging.ERROR)  # "words count mismatch" on nearly every phrase; harmless
 
 SR = 24000
 RELEASE = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/"
@@ -58,6 +60,9 @@ DEFAULT_VOICE = {"coach": "af_heart", "examiner": "am_michael"}
 SPEED_RANGE = (0.5, 2.0)
 RESYNTH_OFF = 0.15        # read again at a corrected speed when the stretch needed is larger than this
 MAX_PHONEMES = 480        # kokoro-onnx splits longer input itself; a phrase is kept below that
+MAX_TEXT_CHARS = 1000     # a longer line (about a minute of speech) is refused rather than rendered for a minute
+RETRY_S = 30.0            # after a failed load, the next attempt waits this long
+FADE_S = 0.005            # each phrase fades in and out, so it does not click against the inserted silence
 PUNCT = ".,!?;:…—"
 VOWELS = set("AIOQWYaeiouæɑɒɔəɛɜɪʊʌᵻɐɚɝ")
 
@@ -108,13 +113,19 @@ def respelling_phonemes(respelling: str, phonemize) -> str:
     return "".join(out)
 
 
-def segment_phonemes(seg: dict, phonemize) -> str:
-    """One segment of the plan as Kokoro phonemes, words separated by single spaces."""
+def segment_phonemes(seg: dict, phonemize, known=None) -> str:
+    """One segment of the plan as Kokoro phonemes, words separated by single spaces. An IPA with no symbol
+    Kokoro knows (known: the tokenizer's filter) falls back to the respelling, then the word, never silence."""
     text = str(seg.get("text") or "").strip()
+    ph = ""
     if seg.get("ipa"):
-        ph = normalize_ipa(str(seg["ipa"])) + trailing_punct(text)
-    elif seg.get("say_as"):
-        ph = respelling_phonemes(str(seg["say_as"]), phonemize) + trailing_punct(text)
+        ph = normalize_ipa(str(seg["ipa"]))
+        if known is not None and not known(ph).strip("ˈˌ"):
+            ph = ""
+    if not ph and seg.get("say_as"):
+        ph = respelling_phonemes(str(seg["say_as"]), phonemize)
+    if ph:
+        ph += trailing_punct(text)
     else:
         ph = phonemize(text) if text else ""
     words = ph.split()
@@ -234,6 +245,21 @@ def wav_bytes(audio: np.ndarray, sr: int = SR) -> bytes:
 
 # ---- the engine -------------------------------------------------------------------------------------------------
 
+def _fade(audio: np.ndarray) -> np.ndarray:
+    n = min(len(audio) // 2, int(SR * FADE_S))
+    if not n:
+        return audio
+    ramp = np.linspace(0.0, 1.0, n, dtype=np.float32)
+    audio = np.array(audio, dtype=np.float32)
+    audio[:n] *= ramp
+    audio[-n:] *= ramp[::-1]
+    return audio
+
+
+class LoadError(RuntimeError):
+    """A load failure already in words (a bad download)."""
+
+
 def _sha256(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
@@ -252,14 +278,24 @@ class Kokoro:
         self._run_lock = threading.Lock()
         self.state = "not loaded"     # not loaded | downloading | loading | ready | failed
         self.progress = 0.0
-        self.error: str | None = None
+        self.error: str | None = None      # why the last load failed, in words (the raw exception is logged)
+        self.import_error: str | None = None
+        self._failed_at = 0.0
 
     def installed(self) -> bool:
         try:
             import kokoro_onnx  # noqa: F401
             return True
-        except Exception:
+        except ModuleNotFoundError as exc:
+            self.import_error = None if exc.name == "kokoro_onnx" else f"{type(exc).__name__}: {exc}"
             return False
+        except Exception as exc:  # installed, but it or a library it loads (onnxruntime, espeak) failed to import
+            self.import_error = f"{type(exc).__name__}: {exc}"
+            return False
+
+    def retry_in(self) -> float:
+        """Seconds until a failed load may be tried again (0: now, or it has not failed)."""
+        return max(0.0, self._failed_at + RETRY_S - time.monotonic()) if self.state == "failed" else 0.0
 
     def files_present(self) -> bool:
         return all((self.dir / f).exists() and (self.dir / f).stat().st_size == size for f, size, _ in (MODEL, VOICES_FILE))
@@ -282,7 +318,7 @@ class Kokoro:
                         self.progress = min(done / total, 1.0)
             if part.stat().st_size != size or _sha256(part) != sha:
                 part.unlink(missing_ok=True)
-                raise RuntimeError(f"{name} did not match its published size and checksum")
+                raise LoadError(f"the downloaded {name} did not match its published size and checksum")
             os.replace(part, self.dir / name)
 
     def load(self):
@@ -292,6 +328,8 @@ class Kokoro:
         with self._load_lock:
             if self._k is not None:
                 return self._k
+            if self.retry_in():
+                raise RuntimeError(f"The natural voice could not be prepared ({self.error}).")
             try:
                 if not self.files_present():
                     self.state = "downloading"
@@ -307,19 +345,37 @@ class Kokoro:
                 self.state, self.error = "ready", None
                 log.info("Kokoro voice ready")
             except Exception as exc:
-                self.state, self.error = "failed", f"{type(exc).__name__}: {exc}"
-                log.warning("Kokoro voice unavailable: %s", self.error)
+                self.state, self.error, self._failed_at = "failed", self._plain(exc), time.monotonic()
+                log.warning("Kokoro voice unavailable: %s: %s", type(exc).__name__, exc)
                 raise RuntimeError(f"The natural voice could not be prepared ({self.error}).") from exc
         return self._k
+
+    def _plain(self, exc: Exception) -> str:
+        """A failed load in words the speaker can act on."""
+        import httpx
+        if isinstance(exc, LoadError):
+            return str(exc)
+        if isinstance(exc, httpx.HTTPStatusError):
+            return f"the voice model could not be downloaded (GitHub answered {exc.response.status_code})"
+        if isinstance(exc, httpx.HTTPError):
+            return "the voice model could not be downloaded: this computer could not reach GitHub"
+        if isinstance(exc, OSError):
+            return f"the voice model files in {self.dir} could not be written or read ({exc.strerror or type(exc).__name__})"
+        return f"the voice model could not be loaded ({type(exc).__name__})"
 
     def render(self, plan: dict, voice: str) -> tuple[np.ndarray, list[float | None], list[str]]:
         """(audio at SR, each segment's start in seconds or None if not spoken, what was shaped)."""
         if voice not in VOICES:
             raise RuntimeError(f"no Kokoro voice called {voice}")
-        k = self.load()
         segments = list(plan.get("segments") or [])
+        chars = sum(len(str(s.get("text") or "")) for s in segments)
+        if chars > MAX_TEXT_CHARS:
+            raise RuntimeError(f"This line is too long for the natural voice ({chars} characters; "
+                               f"the limit is {MAX_TEXT_CHARS}). Split it into shorter lines.")
+        k = self.load()
         lang = lang_of(voice)
         phon = lambda s: k.tokenizer.phonemize(s, lang)  # noqa: E731
+        known = k.tokenizer.known
         lead = min(max(float(plan.get("lead_pause_s") or 0.0), 0.0), 10.0)
         parts = [np.zeros(int(SR * lead), dtype=np.float32)]
         t = lead
@@ -327,8 +383,9 @@ class Kokoro:
         applied: list[str] = []
         with self._run_lock:
             for ph in phrases(segments):
-                for chunk in self._chunks(ph.segs, segments, phon):
-                    audio, rel, did = self._phrase(k, voice, lang, segments, chunk, phon)
+                for chunk in self._chunks(ph.segs, segments, phon, known):
+                    audio, rel, did = self._phrase(k, voice, lang, segments, chunk, phon, known)
+                    audio = _fade(audio)
                     for i, s in zip(chunk, rel):
                         starts[i] = round(t + s, 3)
                     parts.append(audio)
@@ -338,12 +395,12 @@ class Kokoro:
                 t += ph.pause_after
         return np.concatenate(parts), starts, applied
 
-    def _chunks(self, idx: list[int], segments: list[dict], phon) -> list[list[int]]:
+    def _chunks(self, idx: list[int], segments: list[dict], phon, known=None) -> list[list[int]]:
         """A phrase split at segment boundaries so each model call stays under MAX_PHONEMES."""
         out: list[list[int]] = [[]]
         size = 0
         for i in idx:
-            n = len(segment_phonemes(segments[i], phon)) + 1
+            n = len(segment_phonemes(segments[i], phon, known)) + 1
             if out[-1] and size + n > MAX_PHONEMES:
                 out.append([])
                 size = 0
@@ -351,8 +408,8 @@ class Kokoro:
             size += n
         return out
 
-    def _phrase(self, k, voice: str, lang: str, segments: list[dict], idx: list[int], phon):
-        seg_ph = [segment_phonemes(segments[i], phon) for i in idx]
+    def _phrase(self, k, voice: str, lang: str, segments: list[dict], idx: list[int], phon, known=None):
+        seg_ph = [segment_phonemes(segments[i], phon, known) for i in idx]
         counts = [len(p.split()) for p in seg_ph]
         text = " ".join(p for p in seg_ph if p)
         if not text:

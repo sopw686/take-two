@@ -75,7 +75,10 @@
 }
 
 * { box-sizing: border-box; }
+/* Author display rules (.rec-panel's flex, .improv-options' grid) would otherwise beat the hidden attribute. */
+[hidden] { display: none !important; }
 html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+body { overflow-x: clip; }
 h1, h2, h3 { font-family: var(--serif); font-weight: 500; letter-spacing: -0.01em; }
 h1 { font-size: 28px; margin: 0; }
 h2 { font-size: 22px; margin: 0 0 8px; }
@@ -149,7 +152,11 @@ main { max-width: 1100px; margin: 0 auto 80px; padding: 0 24px; }
 blockquote { font-family: var(--serif); font-size: 17px; margin: 6px 0 10px; padding-left: 12px; border-left: 3px solid var(--rule); }
 
 /* report */
-.report-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.report-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 12px; }
+.report-head > :last-child { margin-left: auto; }
+.report-head h2 .muted.small { white-space: nowrap; }
+.report-head .take-actions, .report-head .head-actions { flex-wrap: wrap; justify-content: flex-end; }
+.take-actions .ghost-btn, .head-actions .ghost-btn { white-space: nowrap; }
 .summary { background: var(--paper); border: 1px solid var(--rule); border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; font-family: var(--serif); font-size: 18px; }
 .summary ul { margin: 0 0 8px; padding-left: 20px; }
 .summary p { font-family: var(--sans); margin: 0; }
@@ -181,7 +188,7 @@ blockquote { font-family: var(--serif); font-size: 17px; margin: 6px 0 10px; pad
 .st-diverged, .st-missing, .st-over { background: var(--div-bg); color: var(--div); border-color: var(--div-border); }
 .st-unknown, .st-unmeasurable, .st-not_found, .st-no_budget { background: var(--unk-bg); color: var(--unk); border-color: var(--unk-border); }
 .tip { position: relative; }
-.tip:hover::after, .tip:focus-visible::after, .tip.pinned::after { content: attr(data-tip); position: absolute; left: 0; top: 130%; z-index: 20; width: 360px; max-width: 70vw; background: var(--tip-bg); color: var(--tip-ink); font-family: var(--sans); font-size: 13px; line-height: 1.45; padding: 10px 12px; border-radius: 8px; white-space: normal; font-weight: 400; box-shadow: 0 6px 20px var(--shadow); }
+.tip:hover::after, .tip:focus-visible::after, .tip.pinned::after { content: attr(data-tip); position: absolute; left: 0; top: 130%; z-index: 20; width: 360px; max-width: min(70vw, calc(100vw - 32px)); background: var(--tip-bg); color: var(--tip-ink); font-family: var(--sans); font-size: 13px; line-height: 1.45; padding: 10px 12px; border-radius: 8px; white-space: normal; font-weight: 400; box-shadow: 0 6px 20px var(--shadow); }
 .transcript { font-family: var(--serif); font-size: 16px; }
 .transcript .w { cursor: pointer; }
 .transcript .w:hover { background: var(--playing); }
@@ -203,6 +210,8 @@ details.card summary { cursor: pointer; font-family: var(--serif); font-size: 17
 .setting small { font-size: 12px; }
 .setting input[type="number"] { font: inherit; padding: 5px 8px; border: 1px solid var(--rule); border-radius: 6px; }
 .setting.check { grid-template-columns: 24px 1fr; }
+.setting:has(> select) { grid-template-columns: 1fr minmax(0, 240px); }
+.setting > select.label-input { width: 100%; }
 .dialog-actions { display: flex; gap: 8px; margin-top: 18px; align-items: center; }
 
 /* suggestions review */
@@ -327,7 +336,9 @@ a.ghost-btn { text-decoration: none; display: inline-block; }
 .prompter-bar { display: flex; align-items: center; gap: 8px; }
 .prompter-bar .muted.small:not(.prompter-note) { white-space: nowrap; }
 .prompter-note { max-width: 72ch; }
-.prompter-scroll { position: relative; height: calc(100vh - 290px); min-height: 360px; overflow-y: auto; background: var(--paper); border: 1px solid var(--rule); border-radius: 12px; padding: 16px 30px 55vh; font-family: var(--serif); font-size: var(--prompter-px); line-height: 1.5; }
+.prompter-scroll { position: relative; height: calc(100vh - 400px); min-height: 240px; overflow-y: auto; background: var(--paper); border: 1px solid var(--rule); border-radius: 12px; padding: 16px 30px 0; font-family: var(--serif); font-size: var(--prompter-px); line-height: 1.5; }
+/* Room to scroll the last line up to the reading spot. A spacer, not bottom padding, which would set the box's minimum height. */
+.prompter-scroll::after { content: ""; display: block; height: 55vh; }
 .prompter-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pl-section { font-size: 0.62em; color: var(--accent); margin: 0.9em 0 0.25em; }
 .pl { margin: 0 -14px 0.3em; padding: 0.08em 14px; border-radius: 8px; border: 3px solid transparent; transition: background 200ms, border-color 200ms, opacity 200ms; }
@@ -350,6 +361,8 @@ button.mark.pause { font-size: 14px; }
 .mark:focus-visible, .w.tip:focus-visible, .timeline:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .tip.pinned { box-shadow: 0 0 0 2px var(--accent); }
 .tip.tip-off::after { display: none; }
+/* Chips in the right half of the window open their tip leftwards (main.ts sets the class). */
+.tip.tip-right::after { left: auto; right: 0; }
 .legend .mark { cursor: default; }
 
 /* timeline strip */
@@ -455,7 +468,7 @@ button.mark.pause { font-size: 14px; }
 @media (prefers-reduced-motion: reduce) { .hear-seg { transition: none; } }
 
 /* Spoken examiner */
-kbd { font-family: var(--sans); font-size: 12px; padding: 0 5px; border: 1px solid var(--rule-strong); border-bottom-width: 2px; border-radius: 4px; background: var(--paper); }
+kbd { font-family: var(--sans); font-size: 12px; padding: 0 5px; border: 1px solid var(--rule-strong); border-bottom-width: 2px; border-radius: 4px; background: var(--paper); color: var(--ink); }
 .examiner-live .examiner-question { font-size: 22px; margin: 8px 0; }
 .examiner-live.listening { border-color: var(--accent); }
 .examiner-phase { font-weight: 600; }

@@ -41,7 +41,7 @@ function render(): void {
   stopSegment();
   const p = document.getElementById("player") as HTMLAudioElement;
   p.pause();
-  p.ontimeupdate = null;  // the view that set it is gone
+  p.ontimeupdate = p.onplay = p.onpause = p.onended = null;  // the view that set them is gone
   switch (tab) {
     case "script": renderEditor(main); break;
     case "rehearse": renderRehearse(main, () => go("report")); break;
@@ -66,20 +66,45 @@ function voiceBanner(): (HTMLElement | string)[] {
   ];
 }
 
+function privacyBanner(): void {
+  const health = state.health;
+  if (!health) return;
+  const stt = health.stt;
+  privacy.replaceChildren(
+    health.audio_leaves_machine
+      ? h("span", { class: "warn" }, `Audio is sent to a cloud transcription service (${stt.backend}) because the server was configured with a key for it.`)
+      : h("span", {}, `Audio stays on this computer. Transcription runs locally with ${stt.model} on ${stt.device}${stt.loaded ? "" : " (loading…)"}.`),
+    health.llm.available
+      ? h("span", { class: "muted" }, ` Suggestions use ${health.llm.provider}; it only ever sees script text and measured numbers, never audio.`)
+      : h("span", { class: "muted" }, " No LLM key configured: suggestions are off, everything else works."),
+    ...voiceBanner(),
+  );
+}
+
+/** The speech model loads in the background after the server starts: ask again until it is ready, then drop "(loading…)". */
+function pollSttLoaded(tries = 300): void {
+  if (tries <= 0) return;  // ten minutes: a warm-up that failed will not finish
+  window.setTimeout(async () => {
+    try {
+      const fresh = await api.health();
+      if (state.health) state.health.stt = fresh.stt;
+      if (fresh.stt.loaded) {
+        privacyBanner();
+        return;
+      }
+    } catch {
+      /* server briefly unreachable: keep asking */
+    }
+    pollSttLoaded(tries - 1);
+  }, 2000);
+}
+
 async function boot(): Promise<void> {
   try {
     state.health = await api.health();
     if (!state.settings) state.setSettings({ ...state.health.defaults });
-    const stt = state.health.stt;
-    privacy.replaceChildren(
-      state.health.audio_leaves_machine
-        ? h("span", { class: "warn" }, `Audio is sent to a cloud transcription service (${stt.backend}) because the server was configured with a key for it.`)
-        : h("span", {}, `Audio stays on this computer. Transcription runs locally with ${stt.model} on ${stt.device}${stt.loaded ? "" : " (loading…)"}.`),
-      state.health.llm.available
-        ? h("span", { class: "muted" }, ` Suggestions use ${state.health.llm.provider}; it only ever sees script text and measured numbers, never audio.`)
-        : h("span", { class: "muted" }, " No LLM key configured: suggestions are off, everything else works."),
-      ...voiceBanner(),
-    );
+    privacyBanner();
+    if (!state.health.stt.loaded) pollSttLoaded();
   } catch (err) {
     privacy.replaceChildren(h("span", { class: "warn" }, `Cannot reach the Take Two server: ${(err as Error).message}`));
   }
@@ -115,6 +140,13 @@ async function openStartupTake(): Promise<void> {
 }
 
 installTipPinning();
+// A tip is 360 px wide and opens rightwards; for a chip in the right half of the window, open it leftwards instead.
+const flipTip = (e: Event) => {
+  const tip = (e.target as Element | null)?.closest?.(".tip");
+  if (tip) tip.classList.toggle("tip-right", tip.getBoundingClientRect().left > window.innerWidth / 2);
+};
+document.addEventListener("mouseover", flipTip);
+document.addEventListener("focusin", flipTip);
 window.addEventListener("hashchange", render);
 (document.getElementById("settings-btn") as HTMLButtonElement).addEventListener("click", () => openSettings(async () => {
   let failed: unknown = null;

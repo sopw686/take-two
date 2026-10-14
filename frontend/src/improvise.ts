@@ -329,6 +329,7 @@ export async function renderImprovise(root: HTMLElement, goToReport: () => void)
       });
       return;
     }
+    if (active !== rec) return;  // stopped while the microphone was opening
     phase.textContent = "Speaking";
     stopBtn.hidden = false;
     const t0 = performance.now();

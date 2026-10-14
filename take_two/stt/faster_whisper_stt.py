@@ -57,6 +57,17 @@ def cuda_available() -> bool:
         return False
 
 
+def _model_path(name: str) -> str:
+    """The cached snapshot when the model is already downloaded, so a start does not ask huggingface.co for the
+    latest revision; otherwise the name itself (WhisperModel then downloads it)."""
+    from faster_whisper.utils import download_model
+    try:
+        path = download_model(name, local_files_only=True)
+    except Exception:  # not cached, or not a known model name (e.g. a local folder)
+        return name
+    return path if (Path(path) / "model.bin").exists() else name
+
+
 class FasterWhisperTranscriber:
     name = "faster-whisper"
 
@@ -87,8 +98,9 @@ class FasterWhisperTranscriber:
             from faster_whisper import WhisperModel
 
             self._resolve()
+            path = _model_path(self.model_name)
             try:
-                model = WhisperModel(self.model_name, device=self.device, compute_type=self.compute_type)
+                model = WhisperModel(path, device=self.device, compute_type=self.compute_type)
                 if self.device == "cuda":
                     # Force the lazy cuBLAS load now so a broken CUDA setup fails here, not mid-request.
                     segs, _ = model.transcribe(np.zeros(16000, dtype=np.float32), language="en", beam_size=1,
@@ -98,7 +110,7 @@ class FasterWhisperTranscriber:
                 if self.device != "cpu":
                     log.warning("CUDA unavailable for faster-whisper (%s); falling back to CPU int8", exc)
                     self.device, self.compute_type = "cpu", "int8"
-                    model = WhisperModel(self.model_name, device="cpu", compute_type="int8")
+                    model = WhisperModel(path, device="cpu", compute_type="int8")
                 else:
                     raise
             self._model = model

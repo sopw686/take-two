@@ -9,7 +9,7 @@ You mark up the script the way a performer marks a poem (slow down here, pause h
 - **Measured, not judged:** every mark comes back as met, close to, or diverged from *your* mark, with the number behind it and the moment a click away.
 - **Local-first:** speech-to-text (faster-whisper) and pause detection (Silero VAD) run on your machine. Audio leaves it only if you add a cloud key, and the UI says so.
 - **Optional LLM features** (Claude): suggest marks, check whether a `[DEFINE]` term was explained, coaching notes. The model sees text and numbers, never audio, and code verifies its output (e.g. quotes not found in the transcript are dropped).
-- **Stack:** Python / FastAPI backend, TypeScript / Vite frontend. 345 Python unit tests and 18 frontend tests, a synthetic recording with known ground truth, and browser tests that record through Chrome's fake microphone, including a full spoken-examiner session.
+- **Stack:** Python / FastAPI backend, TypeScript / Vite frontend. 371 Python unit tests (plus 10 slow and browser tests) and 25 frontend tests, a synthetic recording with known ground truth, and browser tests that record through Chrome's fake microphone, including a full spoken-examiner session.
 
 ## Quick start
 
@@ -25,9 +25,9 @@ Requires [uv](https://docs.astral.sh/uv/) and Node 18+ (one-time frontend build)
 ./run.sh
 ```
 
-Then open <http://127.0.0.1:8765>. The first run installs the Python environment, builds the frontend, and downloads the `small.en` speech model (~500 MB).
+Then open <http://127.0.0.1:8765>. The first run installs the Python environment, builds the frontend, and downloads the `small.en` speech model (~500 MB) and the local voice model (~190 MB).
 
-**No microphone, model or key needed:** open the **Report** tab and click **Load example take** to see a full report from a synthetic-voice take.
+**No microphone, model or key needed:** click **Load example take** on the **Takes** tab (or on the Report tab before your first take) to see a full report from a synthetic-voice take.
 
 **To try it yourself:** on the Script tab, **Start from an example**, paste your own script, or import the speaker notes of a PowerPoint deck; then go to Rehearse, record, and read the report.
 
@@ -35,8 +35,8 @@ Then open <http://127.0.0.1:8765>. The first run installs the Python environment
 
 ```bash
 uv run pytest            # unit tests, about 20 seconds
-uv run pytest -m slow    # synthetic fixture through real local speech-to-text
-uv run pytest -m browser # record, stop and read the report in Chrome with a fake microphone (needs Google Chrome, ~90 s)
+uv run pytest -m slow    # synthetic fixture through real local speech-to-text, and one real render by the local neural voice
+uv run pytest -m browser # record, stop and read the report in Chrome with a fake microphone (needs Google Chrome, ~2 min)
 uv run python -m eval.run   # evaluation against labelled recordings -> eval/RESULTS.md (see eval/README.md)
 cd frontend; npm test       # the frontend's pure logic (cue plan -> utterances) under Node's test runner (Node 22+)
 uv run python scripts/writeup_pdf.py           # WRITEUP.md -> WRITEUP.pdf; fails if over one page or a required section is missing
@@ -90,7 +90,7 @@ The Rehearse tab shows the script as a **teleprompter**: large type (A−/A+, re
 - **Words that may not have been clear**: script words the recognizer heard as another word ("The script says “bleaching”; the recognizer heard “leaching” (confidence 0.57).") or was less sure of than your threshold, each with its time (click to hear it), **Hear it** (the word slowly, then at an ordinary pace) and **Drill this word** (say just that word; the result is what the recognizer heard, with its confidence). A recognizer can miss a word because of an accent, a noisy microphone, a rare word or a quiet moment, and the card says so; **I said it fine** leaves a word out of later reports.
 - **Hear it** on each `[KEY]` line (see below), with **Try it** opening that line's drill.
 - **Drill** a `[KEY]` line or a section from the report: record just that part, judged against the median of the full take it came from ("This try: 18% slower than your median from the full take; pause after 0.9 s: met your mark"). Drills are listed under their take.
-- **Load example take** (Report and Takes tabs): a synthetic-voice take of a short coral-reef script, analyzed instantly from a committed transcript. It needs no microphone and no speech model, so you can see a full report on any machine. It is labelled as synthetic and left out of comparisons.
+- **Load example take** (Takes tab; also on the Report tab before your first take): a synthetic-voice take of a short coral-reef script, analyzed instantly from a committed transcript. It needs no microphone and no speech model, so you can see a full report on any machine. It is labelled as synthetic and left out of comparisons.
 - A failed analysis never loses the recording: the take stays in Takes as "Not analyzed" with Retry (re-runs from the copy on disk) and Delete, and the page offers Download recording.
 - Optional, only when switched on in Settings: a "conference conventions" preset (overall pace band, filler words per 100) and an experimental emphasis check for `*word*`.
 - With an API key: "Suggestions based on your measurements", at most three, each citing a measured number and the mark it concerns.
@@ -156,11 +156,12 @@ Keys at any time: **Space** finish the answer, **R** hear the question again, **
 
 | Variable | Effect |
 |---|---|
-| `ANTHROPIC_API_KEY` | Enables **Suggest marks** and LLM-checked `[DEFINE]` terms. Without it, suggestions are disabled with a one-line note and definitions use a heuristic, labelled as such. |
+| `ANTHROPIC_API_KEY` | Enables **Suggest marks** and LLM-checked `[DEFINE]` terms. Without it, suggestions are disabled with a one-line note and definitions use a heuristic, labelled as such. `TAKE_TWO_ANTHROPIC_MODEL` picks the model (default `claude-opus-5-5`). |
 | `OPENAI_API_KEY` + `TAKE_TWO_STT=openai` | Transcribe with OpenAI's Whisper API instead of locally. The UI shows a banner when audio leaves the machine. |
-| `TAKE_TWO_STT_MODEL` | Local model: `base.en` (faster), `small.en` (default), `medium.en`, … |
+| `TAKE_TWO_STT_MODEL` | Local model: `base.en` (faster), `small.en` (default), `medium.en`, … A model not yet in the Hugging Face cache downloads on first use. In PowerShell: `$env:TAKE_TWO_STT_MODEL = "base.en"; .\run.ps1` (or `.\run.ps1 -SttModel base.en`). |
+| `TAKE_TWO_STT_VAD_FILTER` | `1` (default) lets faster-whisper skip long silences before transcribing; `0`, `false` or `no` turns that off. Pauses are measured by the separate voice-activity detector either way. |
 | `TAKE_TWO_STT_DEVICE` | `auto` (default), `cuda`, or `cpu`. |
-| `TAKE_TWO_TAKES_DIR` | Where takes are saved (default `takes/` next to the app). If that folder is inside a cloud-synced folder (OneDrive, Dropbox, iCloud), the sync client uploads your recordings; point this at a local folder to keep audio on the machine. |
+| `TAKE_TWO_TAKES_DIR` | Where takes are saved (default `takes/` next to the app). If that folder is inside a cloud-synced folder (OneDrive, Dropbox, iCloud), the sync client uploads your recordings; point this at a local folder to keep audio on the machine (on Windows: `.\run.ps1 -TakesDir "$env:LOCALAPPDATA\TakeTwo\takes"`). |
 | `TAKE_TWO_LLM=fake` | Development only: a labelled stand-in model so the suggestion UI can be tried without a key. Not a fallback; without it and without a key, suggestions stay off. |
 | `TAKE_TWO_TTS` | The server voices to offer, in order (default `kokoro,gemini,azure`; each is offered only when it can work). `browser` offers none, so Hear it uses the browser's own voice. |
 | `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) | Offers Google Gemini voices for Hear it and the examiner, directed per phrase. Sent the text of the line you play and how to say it, only after you pick one and confirm; the banner says so. `TAKE_TWO_GEMINI_TTS_MODEL` picks the model (default `gemini-3.8-flash-tts`). Not yet run against Gemini (no key on the development machine). |

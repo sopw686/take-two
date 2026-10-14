@@ -295,9 +295,12 @@ def test_spoken_examiner_session(server, browser):
                    "the first answer to be recorded")
         s.wait_for("/^Session (complete|ended)/.test(document.querySelector('.examiner-phase')?.textContent ?? '')",
                    3 * ANALYSIS_S, "the session to finish")
+        s.wait_for("(document.querySelector('.examiner-question')?.textContent ?? '').startsWith('You answered')", 30,
+                   "the closing line")
         s.check()
         say = page.locator(".examiner-phase").inner_text()
         assert say.startswith("Session complete."), say
+        closing_text = page.locator(".examiner-question").inner_text()
 
         trace = [e[0] for e in page.evaluate("window.__trace")]
         # Questions, then the closing line: four voices. Three answers: three microphones, each closed again.
@@ -325,7 +328,7 @@ def test_spoken_examiner_session(server, browser):
         assert all(a["duration_s"] <= 11.5 for a in mine), [a["duration_s"] for a in mine]
         session = httpx.get(f"{server}/api/improv/session/{mine[0]['session']['id']}", timeout=10).json()
         assert session["closing"].startswith("You answered 3 questions.")
-        assert session["closing"] in say
+        assert session["closing"] in closing_text
         assert page.get_by_role("button", name="Open its report").count() == 3
     finally:
         s.close()

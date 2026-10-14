@@ -2,17 +2,21 @@
 
 export const player = () => document.getElementById("player") as HTMLAudioElement;
 
-/** Play from just before t (seconds). With url, switch to that recording first if another one is loaded
- *  (a drill's "Hear this try" or a comparison cell may have left a different take in the player). */
-export function play(at: number | null | undefined, url?: string): void {
+/** Play from just before t (seconds), up to `until` if given, else to the end. With url, switch to that recording
+ *  first if another one is loaded (a drill's "Hear this try" or a comparison cell may have left a different take in the player). */
+export function play(at: number | null | undefined, url?: string, until?: number | null): void {
   if (at === null || at === undefined) return;
   const p = player();
+  if (until !== null && until !== undefined && until > at) {
+    playSegment(url ?? p.src, Math.max(0, at - 0.15), until);
+    return;
+  }
+  segment++;  // replaces a segment that is playing
   const go = () => {
     p.currentTime = Math.max(0, at - 0.15);
     p.play().catch(() => undefined);  // a newer play() or a source change interrupts this one; that is fine
   };
   if (url && !p.src.endsWith(url)) {
-    segment++;
     p.src = url;
     p.addEventListener("loadedmetadata", go, { once: true });
   } else go();

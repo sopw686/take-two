@@ -117,7 +117,7 @@ def ask_followup(take_id: str, llm, script_text: str = "") -> dict:
     if not text:
         return {"available": True, "followup": None, "reason": "The answer had no words to follow up on."}
     out = llm.complete_structured(SYSTEM, build_user_prompt(meta.get("topic", ""), text, answer_numbers(analysis)),
-                                  FollowUpOutput, max_tokens=2000)
+                                  FollowUpOutput, max_tokens=8000)
     if out is None:
         return {"available": True, "followup": None, "reason": "The model did not return a usable follow-up."}
     kept, dropped = validate_followups(out, text, script_text)
@@ -176,7 +176,9 @@ def closing_line(answers: list[dict], skipped: int = 0) -> str:
     waits = [(a.get("transcript") or {}).get("words") or [] for a in answers]
     firsts = [w[0]["start"] for w in waits if w]
     if firsts:
-        parts.append(f"The longest hesitation before an answer was {max(firsts):.0f} second{'' if round(max(firsts)) == 1 else 's'}.")
+        longest = max(firsts)  # whole seconds would read "0 seconds" for a quick start
+        wait = "under a second" if longest < 1 else _plural(round(longest), "second")
+        parts.append(f"The longest hesitation before an answer was {wait}.")
     if skipped:
         parts.append(f"You skipped {_plural(skipped, 'question')}.")
     return " ".join(parts)

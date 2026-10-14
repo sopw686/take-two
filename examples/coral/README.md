@@ -1,6 +1,6 @@
 # Example take: coral reefs (synthetic voice)
 
-**Load example take** (Report tab or Takes tab) copies this folder into a new take and analyzes it. No microphone and no speech model are needed: the transcript is committed.
+**Load example take** (Takes tab, or the Report tab before the first take) copies this folder into a new take and analyzes it. No microphone and no speech model are needed: the transcript is committed.
 
 - `audio.wav`: the synthetic fixture from `tests/fixtures/fixture.wav`. It is 33.7 s of Windows text-to-speech with planted delivery: one `[KEY]` line sped up 1.3×, one slowed to 0.8×, a missing `/`, a short `/` and a long `//`. Ground truth is in `tests/fixtures/fixture_truth.json`.
 - `script.md`: `tests/fixtures/fixture_script.md`.

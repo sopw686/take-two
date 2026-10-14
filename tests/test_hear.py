@@ -4,6 +4,7 @@ import io
 import json
 import wave
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
@@ -401,3 +402,100 @@ def test_the_natural_voice_is_the_default_and_local(client, monkeypatch):
 
 def test_health_reports_the_server_voice(client):
     assert "tts" in client.get("/api/health").json()
+
+
+# ---- the natural voice through /api/tts, with the model stubbed ----------------------------------------------------
+
+class _Tok:
+    def phonemize(self, s, lang):
+        return s.lower()
+
+    def known(self, s):  # digits and slashes are not Kokoro phonemes
+        return "".join(c for c in s if c.isalpha() or c in " ˈˌ,.")
+
+
+class _Model:
+    tokenizer = _Tok()
+
+    def __init__(self):
+        self.said, self.fail = [], None
+
+    def create_timed(self, text, voice, speed, lang, is_phonemes):
+        self.said.append(text)
+        if self.fail:
+            raise self.fail
+        return np.zeros(4800, dtype=np.float32), 24000, []
+
+
+@pytest.fixture
+def kokoro(tmp_path, monkeypatch):
+    from take_two import neural_voice as nv
+    eng = nv.Kokoro(tmp_path)
+    eng._k, eng.state = _Model(), "ready"
+    monkeypatch.setattr(eng, "installed", lambda: True)
+    monkeypatch.setattr(nv, "ENGINE", eng)
+    monkeypatch.setattr(tts, "PROVIDERS", ["kokoro"])
+    monkeypatch.setattr(tts, "_cache", type(tts._cache)())
+    return eng
+
+
+def _say(client, plan):
+    return client.post("/api/tts", json={"plan": plan, "voice": "kokoro:af_heart"})
+
+
+def test_what_kokoro_refuses_and_a_malformed_plan_are_readable_errors(client, kokoro):
+    kokoro._k.fail = ValueError("Nothing to synthesize")
+    r = _say(client, {"segments": [{"text": "hello there"}]})
+    assert r.status_code == 502 and "could not read this line" in r.json()["detail"]
+    kokoro._k.fail = None
+    for plan in ({"segments": [{"text": "hi", "wpm": "fast"}]}, {"lead_pause_s": "x", "segments": [{"text": "hi"}]},
+                 {"segments": ["coral"]}):
+        r = _say(client, plan)
+        assert r.status_code == 502 and "could not read this line" in r.json()["detail"]
+    r = client.post("/api/tts", content='{"plan": {"segments": [{"text": "hi", "wpm": 1e309}]}, "voice": "kokoro:af_heart"}',
+                    headers={"content-type": "application/json"})
+    assert r.status_code == 502 and "could not read this line" in r.json()["detail"]
+    r = _say(client, {"segments": [{"text": "word " * 300}]})
+    assert r.status_code == 502 and "too long" in r.json()["detail"]
+
+
+def test_an_ipa_kokoro_cannot_say_is_spoken_as_the_word(client, kokoro):
+    r = _say(client, {"segments": [{"text": "coral", "ipa": "123"}]})
+    assert r.status_code == 200 and kokoro._k.said[-1] == "coral"
+    assert _say(client, {"segments": [{"text": "reef", "ipa": "//"}]}).status_code == 200
+    assert kokoro._k.said[-1] == "reef"
+
+
+def test_a_failed_natural_voice_is_offered_again_with_a_plain_reason(client, tmp_path, monkeypatch):
+    import httpx
+    from take_two import neural_voice as nv
+    calls = []
+
+    def stream(*a, **k):
+        calls.append(a)
+        raise httpx.ConnectError("[WinError 10061] No connection could be made")
+    monkeypatch.setattr(httpx, "stream", stream)
+    eng = nv.Kokoro(tmp_path / "models")
+    monkeypatch.setattr(eng, "installed", lambda: True)
+    monkeypatch.setattr(nv, "ENGINE", eng)
+    monkeypatch.setattr(tts, "PROVIDERS", ["kokoro"])
+    monkeypatch.setattr(tts, "_cache", type(tts._cache)())
+    with pytest.raises(RuntimeError):
+        tts.warm_up()
+    v = client.get("/api/tts").json()["voices"][0]
+    assert v["available"] and "could not reach GitHub" in v["note"] and "WinError" not in v["note"]
+    r = _say(client, {"segments": [{"text": "hi"}]})
+    assert r.status_code == 502 and "could not reach GitHub" in r.json()["detail"] and len(calls) == 1
+    eng._failed_at -= nv.RETRY_S + 1  # after the cooldown, playing a line tries the download again
+    assert _say(client, {"segments": [{"text": "hi"}]}).status_code == 502 and len(calls) == 2
+
+
+def test_warm_up_says_one_word_so_the_first_hear_it_is_not_the_slowest(kokoro):
+    tts.warm_up()
+    assert kokoro._k.said == ["ready."]
+
+
+def test_hear_on_the_example_take_uses_its_own_median(client):
+    ex = client.post("/api/examples/coral").json()
+    plan = client.post("/api/hear", json={"take_id": ex["take_id"], "line_index": 0}).json()
+    assert plan["reference_source"] == f"your median {ex['baseline']['median_wpm']:.0f} wpm from this example take"

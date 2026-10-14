@@ -193,7 +193,7 @@ def propose(script: Script, llm) -> dict:
     dropped: list[dict] = []
     todo = [r for r in flagged if not r["confirmed"]]
     if llm_ok and todo:
-        out = llm.complete_structured(SYSTEM, build_user_prompt(script, todo), SayingsOutput, max_tokens=4000)
+        out = llm.complete_structured(SYSTEM, build_user_prompt(script, todo), SayingsOutput, max_tokens=16000)
         if out is not None:
             kept, dropped = validate_sayings(out, todo)
             for r in todo:

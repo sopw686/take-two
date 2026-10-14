@@ -8,6 +8,7 @@ export class Recorder {
   private meter: Meter | null = null;
   private chunks: Blob[] = [];
   private mime = "";
+  private closed = false;  // stopped or cancelled, possibly while the microphone was still opening
 
   get recording(): boolean {
     return this.rec?.state === "recording";
@@ -15,11 +16,14 @@ export class Recorder {
 
   async start(onLevel?: (db: number) => void): Promise<void> {
     // Raw signal: the browser's processing would distort the loudness and pitch measurements.
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    if (this.closed) { stream.getTracks().forEach((t) => t.stop()); return; }
+    this.stream = stream;
     if (onLevel) {
       this.meter = new Meter();
       this.meter.onLevel = onLevel;
       await this.meter.start(this.stream);
+      if (this.closed) { this.release(); return; }
     }
     this.mime = pickMimeType();
     this.rec = new MediaRecorder(this.stream, this.mime ? { mimeType: this.mime } : undefined);
@@ -56,6 +60,7 @@ export class Recorder {
   }
 
   private release(): void {
+    this.closed = true;
     this.meter?.stop();
     this.meter = null;
     this.stream?.getTracks().forEach((t) => t.stop());
