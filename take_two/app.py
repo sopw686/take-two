@@ -38,9 +38,17 @@ async def _lifespan(_app: FastAPI):  # type: ignore[no-untyped-def]
         except Exception as exc:
             log.warning("STT warm-up failed: %s", exc)
 
-    warm = asyncio.create_task(_load())
+    async def _voice() -> None:  # the local voice too: downloaded once, then loaded
+        from take_two import tts
+        try:
+            await run_in_threadpool(tts.warm_up)
+        except Exception as exc:
+            log.warning("Voice warm-up failed: %s", exc)
+
+    warm = [asyncio.create_task(_load()), asyncio.create_task(_voice())]
     yield
-    warm.cancel()  # only the await is cancelled; a load already running in its thread finishes on its own
+    for w in warm:
+        w.cancel()  # only the await is cancelled; a load already running in its thread finishes on its own
 
 
 app = FastAPI(title="Take Two", docs_url="/api/docs", redoc_url=None, lifespan=_lifespan)

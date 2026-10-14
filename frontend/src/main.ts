@@ -54,6 +54,18 @@ function render(): void {
   }
 }
 
+/** The privacy line for the voices: which one speaks by default, and each cloud voice with what it would send. */
+function voiceBanner(): (HTMLElement | string)[] {
+  const t = state.health?.tts;
+  if (!t) return [];
+  const local = t.voices.find((v) => v.id === t.default.coach);
+  const cloud = [...new Map(t.voices.filter((v) => v.sends).map((v) => [v.provider, v])).values()];
+  return [
+    local && local.provider !== "fake" ? h("span", { class: "muted" }, " Hear it speaks with a natural voice that runs on this computer.") : "",
+    ...cloud.map((v) => h("span", { class: "warn" }, ` A ${v.provider === "gemini" ? "Gemini" : "Azure"} voice is offered, which sends ${v.sends}, only if you pick it.`)),
+  ];
+}
+
 async function boot(): Promise<void> {
   try {
     state.health = await api.health();
@@ -66,9 +78,7 @@ async function boot(): Promise<void> {
       state.health.llm.available
         ? h("span", { class: "muted" }, ` Suggestions use ${state.health.llm.provider}; it only ever sees script text and measured numbers, never audio.`)
         : h("span", { class: "muted" }, " No LLM key configured: suggestions are off, everything else works."),
-      state.health.tts?.sends
-        ? h("span", { class: "warn" }, ` Hear it can use ${state.health.tts.label}, which sends ${state.health.tts.sends}, only if you pick that voice; the default is your browser's voice.`)
-        : "",
+      ...voiceBanner(),
     );
   } catch (err) {
     privacy.replaceChildren(h("span", { class: "warn" }, `Cannot reach the Take Two server: ${(err as Error).message}`));

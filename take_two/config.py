@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, TypeAdapter, ValidationError, model_valid
 ROOT = Path(__file__).resolve().parent.parent
 TAKES_DIR = Path(os.environ.get("TAKE_TWO_TAKES_DIR", ROOT / "takes"))
 FRONTEND_DIST = ROOT / "frontend" / "dist"
+MODELS_DIR = Path(os.environ.get("TAKE_TWO_MODELS_DIR", ROOT / "models"))  # the local voice model, downloaded once
 SAMPLE_SCRIPT = ROOT / "sample_script.md"
 EXAMPLES_DIR = ROOT / "examples"
 # Scripts offered under "Start from an example" on the Script tab: (id, label, file). The toast and the poem were written for the demo.

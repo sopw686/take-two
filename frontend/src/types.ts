@@ -51,8 +51,16 @@ export interface Health {
   defaults: Settings;
 }
 
-/** The optional server voice for Hear it; the browser's own voice needs nothing from the server. */
-export interface TtsStatus { kind: "azure" | "fake" | null; available: boolean; label: string | null; sends: string | null; reason: string | null }
+/** One server voice: the local natural voice (Kokoro), a cloud voice, or the labelled fake. */
+export interface ServerVoice {
+  id: string; provider: "kokoro" | "gemini" | "azure" | "fake"; label: string; local: boolean;
+  sends: string | null; available: boolean; ready: boolean; reason: string | null; note: string | null;
+}
+/** The server voices that can be used now and each role's default; the browser's own voice needs nothing from here. */
+export interface TtsStatus {
+  voices: ServerVoice[]; default: { coach: string | null; examiner: string | null };
+  unavailable: string[]; reason: string | null;
+}
 
 /** One stretch of a line the voice says the same way, then the pause after it. */
 export interface CueSegment {

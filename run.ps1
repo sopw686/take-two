@@ -6,6 +6,7 @@
 #
 # Optional env vars: ANTHROPIC_API_KEY (Suggest marks, LLM define checks),
 # OPENAI_API_KEY + TAKE_TWO_STT=openai (cloud transcription), TAKE_TWO_STT_MODEL (base.en | small.en | ...).
+# GEMINI_API_KEY (optional cloud voices for Hear it). The local natural voice downloads once (~190 MB) on first start.
 
 param([switch]$Rebuild, [switch]$Cpu, [int]$Port = 8765)
 $ErrorActionPreference = "Stop"

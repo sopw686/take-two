@@ -58,7 +58,8 @@ export function wordPlan(word: string, respelling: string | null): PlanLike {
   return { lead_pause_s: 0, segments: segs };
 }
 
-/** Plain text at an ordinary pace: the examiner's questions. */
-export function textPlan(text: string, wpm = VOICE_WPM): PlanLike {
+/** Plain text at the voice's own pace (wpm 0): the examiner's questions. A browser voice speaks it at rate 1;
+ *  a natural voice reads it as it would, with nothing stretched. */
+export function textPlan(text: string, wpm = 0): PlanLike {
   return { lead_pause_s: 0, segments: [{ text, wpm, pitch_st: 0, volume_db: 0, contour: "none", pause_after_s: 0 }] };
 }

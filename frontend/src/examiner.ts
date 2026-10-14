@@ -195,6 +195,8 @@ function runSession(root: HTMLElement, questions: Question[], goToReport: () => 
   document.addEventListener("keydown", onKey);
   document.addEventListener("keyup", onKey);  // a focused button would act on Space at keyup
 
+  // A local voice renders every question while the first is being asked, so none waits for the voice.
+  for (const q of questions) getSpeaker("examiner").prefetch(textPlan(q.text));
   const question = () => questions[s.index];
   const spoken = () => s.followup ?? question().text;
 

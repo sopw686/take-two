@@ -346,35 +346,57 @@ def test_ssml_escapes_text_and_bounds_values():
     xml.dom.minidom.parseString(ssml)  # well-formed
 
 
-def test_server_voice_disabled_with_a_reason_without_a_key(client, monkeypatch):
-    monkeypatch.setattr(tts, "PROVIDER", "azure")
+def test_cloud_voices_are_not_offered_without_a_key(client, monkeypatch):
+    monkeypatch.setattr(tts, "PROVIDERS", ["azure", "gemini"])
     monkeypatch.setattr(tts, "AZURE_KEY", "")
+    monkeypatch.setattr(tts, "GEMINI_KEY", "")
     st = client.get("/api/tts").json()
-    assert st["available"] is False and "AZURE_SPEECH_KEY" in st["reason"]
-    assert client.post("/api/tts", json={"plan": {"segments": []}}).status_code == 409
-    monkeypatch.setattr(tts, "PROVIDER", "browser")
-    assert "browser" in client.get("/api/tts").json()["reason"]
+    assert st["voices"] == [] and st["default"] == {"coach": None, "examiner": None}
+    assert any("AZURE_SPEECH_KEY" in u for u in st["unavailable"]) and any("GEMINI_API_KEY" in u for u in st["unavailable"])
+    assert client.post("/api/tts", json={"plan": {"segments": []}, "voice": "azure"}).status_code == 409
+    monkeypatch.setattr(tts, "PROVIDERS", [])
+    st = client.get("/api/tts").json()
+    assert st["voices"] == [] and "browser" in st["reason"]
 
 
 def test_cloud_voice_needs_consent_on_the_request(client, monkeypatch):
-    monkeypatch.setattr(tts, "PROVIDER", "azure")
+    monkeypatch.setattr(tts, "PROVIDERS", ["azure", "gemini"])
     monkeypatch.setattr(tts, "AZURE_KEY", "k")
     monkeypatch.setattr(tts, "AZURE_REGION", "westeurope")
+    monkeypatch.setattr(tts, "GEMINI_KEY", "g")
     st = client.get("/api/tts").json()
-    assert st["sends"].startswith("the text of the line you play (script text, no audio)")
-    r = client.post("/api/tts", json={"plan": {"segments": [{"text": "hi"}]}})
-    assert r.status_code == 403 and "consent" in r.json()["detail"]
+    sends = {v["provider"]: v["sends"] for v in st["voices"]}
+    assert sends["azure"].startswith("the text of the line you play (script text, no audio)")
+    assert sends["gemini"].startswith("the text of the line you play and how to say it (script text, no audio)")
+    assert st["default"] == {"coach": None, "examiner": None}  # a cloud voice is never the default
+    for voice in ("azure", "gemini:Sulafat"):
+        r = client.post("/api/tts", json={"plan": {"segments": [{"text": "hi"}]}, "voice": voice})
+        assert r.status_code == 403 and "consent" in r.json()["detail"]
 
 
 def test_fake_voice_renders_tones_with_the_plan_timing(client, monkeypatch):
-    monkeypatch.setattr(tts, "PROVIDER", "fake")
+    monkeypatch.setattr(tts, "PROVIDERS", ["fake"])
     plan = delivery.marked_plan(parse_script("one two / three"), 0, Settings(short_pause_s=1.0), 120)
-    r = client.post("/api/tts", json={"plan": plan})
+    r = client.post("/api/tts", json={"plan": plan, "voice": "fake"})
     assert r.status_code == 200 and r.headers["content-type"] == "audio/wav"
     with wave.open(io.BytesIO(r.content)) as w:
         seconds = w.getnframes() / w.getframerate()
     assert seconds == pytest.approx(2 * 0.5 + 1.0 + 0.5, abs=0.01)  # two words at 120 wpm, the pause, one word
-    assert "tones" in client.get("/api/tts").json()["label"]
+    assert json.loads(r.headers["X-Segment-Starts"]) == [0.0, 2.0]
+    st = client.get("/api/tts").json()
+    assert "tones" in st["voices"][0]["label"] and st["default"]["coach"] == "fake"
+    # the choice saved before there was more than one server voice still works
+    assert client.post("/api/tts", json={"plan": plan, "voice": "server"}).status_code == 200
+
+
+def test_the_natural_voice_is_the_default_and_local(client, monkeypatch):
+    monkeypatch.setattr(tts, "PROVIDERS", ["kokoro", "gemini"])
+    monkeypatch.setattr(tts, "GEMINI_KEY", "g")
+    st = client.get("/api/tts").json()
+    natural = [v for v in st["voices"] if v["provider"] == "kokoro"]
+    assert natural and all(v["local"] and v["sends"] is None for v in natural)
+    assert st["default"] == {"coach": "kokoro:af_heart", "examiner": "kokoro:am_michael"}
+    assert client.post("/api/tts", json={"plan": {"segments": []}, "voice": "kokoro:nobody"}).status_code == 409
 
 
 def test_health_reports_the_server_voice(client):

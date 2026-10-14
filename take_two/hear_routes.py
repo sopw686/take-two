@@ -179,20 +179,27 @@ async def tts_status() -> dict:
 
 class TtsBody(BaseModel):
     plan: dict
+    voice: str | None = None   # a server voice id from GET /api/tts; None is the first local one
     consent: bool = False
 
 
 @router.post("/tts")
 async def tts_speak(body: TtsBody) -> Response:
-    """Speak a plan with the configured server voice. A cloud voice needs the speaker's consent on the request."""
-    st = tts.status()
-    if not st["available"]:
-        raise HTTPException(409, st["reason"])
-    if st["sends"] and not body.consent:
-        raise HTTPException(403, f"This voice sends {st['sends']}; the request did not carry your consent.")
+    """Speak a plan with a server voice. A cloud voice needs the speaker's consent on the request.
+    X-Segment-Starts carries when each segment starts (seconds; null if not spoken), for the highlight."""
+    v = tts.find(body.voice)
+    if v is None:
+        st = tts.status()
+        raise HTTPException(409, st["reason"] or f"No server voice called {body.voice}.")
+    if not v["available"]:
+        raise HTTPException(409, v["reason"])
+    if v["sends"] and not body.consent:
+        raise HTTPException(403, f"This voice sends {v['sends']}; the request did not carry your consent.")
+    if v["provider"] == "kokoro" and not v["ready"] and v["note"] and v["note"].startswith("downloading"):
+        raise HTTPException(503, f"The natural voice is still {v['note']}.")
     try:
-        audio, media = await run_in_threadpool(tts.synthesize, body.plan)
+        audio, media, starts = await run_in_threadpool(tts.synthesize, body.plan, v["id"])
     except RuntimeError as exc:
         raise HTTPException(502, str(exc)) from exc
-    return Response(audio, media_type=media, headers={"Cache-Control": "no-store"})
-
+    return Response(audio, media_type=media, headers={"Cache-Control": "no-store", "X-Voice": v["id"],
+                                                      "X-Segment-Starts": json.dumps(starts)})

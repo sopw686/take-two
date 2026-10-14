@@ -4,7 +4,7 @@
 
 import { api } from "./api";
 import { h } from "./dom";
-import { getSpeaker, onSegment, onVoicesChanged, stopAll, voicePicker, voicesReady } from "./speaker";
+import { getSpeaker, onSegment, onVoiceNote, onVoicesChanged, stopAll, voiceKind, voicePicker, voicesReady } from "./speaker";
 import { wordPlan } from "./schedule";
 import { state } from "./state";
 import type { CoachSuggestion, CuePlan } from "./types";
@@ -12,6 +12,16 @@ import type { CoachSuggestion, CuePlan } from "./types";
 export const SYNTHETIC_NOTE = "Synthetic demonstration of your marks. It shows one way to do it, not the way.";
 const COARSE_NOTE = "A browser voice gives coarse control of pace and pitch and none of tone: a rising or falling end is "
   + "approximated by saying the last word a little higher or lower.";
+const NATURAL_NOTE = "A neural voice reads the line naturally on this computer; the pauses are exact, and the pace, stress "
+  + "and rising or falling ends are shaped onto its reading.";
+const CLOUD_NOTE = "A cloud voice reads the line, directed in words (pace, stressed words, how each phrase ends); the pauses "
+  + "are exact, and it may not follow every direction.";
+
+/** What this voice can and cannot do, beside the demonstration. */
+export function voiceNote(): string {
+  const k = voiceKind("coach");
+  return k === "natural" ? NATURAL_NOTE : k === "cloud" ? CLOUD_NOTE : k === "fake" ? "" : COARSE_NOTE;
+}
 
 export interface HearOpts {
   lineIndex: number;
@@ -118,6 +128,8 @@ export function hearPanel(opts: HearOpts): HTMLElement {
     const ok = voice.available();
     hearBtn.disabled = !ok.ok || !plan.segments.length || !plan.available;
     status.textContent = ok.ok ? "" : ok.reason ?? "";
+    noteEl.textContent = voiceNote();
+    if (ok.ok && plan.available) voice.prefetch(plan);  // a local voice renders while you read the plan
   }
 
   function coachPart(plan: CuePlan): HTMLElement[] {
@@ -166,18 +178,23 @@ export function hearPanel(opts: HearOpts): HTMLElement {
     const voice = getSpeaker("coach");
     stopBtn.disabled = false;
     speaking = true;
-    status.textContent = `Playing: ${version === "marked" ? "as you marked it" : "the coach's version"}, ${voice.label}.`;
+    status.textContent = `Preparing ${voice.label}…`;
+    const playing = `Playing: ${version === "marked" ? "as you marked it" : "the coach's version"}, ${voice.label}.`;
+    const shown = onSegment((i) => { if (i >= 0 && status.textContent?.startsWith("Preparing")) status.textContent = playing; });
     try {
       await voice.speak(plan);
       if (speaking) status.textContent = "";
     } catch (err) {
       status.textContent = `The voice could not play: ${(err as Error).message}`;
     }
+    shown();
     speaking = false;
     stopBtn.disabled = true;
   });
   stopBtn.addEventListener("click", () => { stop(); status.textContent = "Stopped."; });
 
+  const noteEl = h("span", {}, voiceNote());
+  const unnote = onVoiceNote((msg) => { if (panel.isConnected) status.textContent = msg; });
   const panel = h("div", { class: "hear-panel", role: "group", "aria-label": `Hear it: line ${opts.lineIndex + 1}`,
     onClick: (e) => e.stopPropagation(),
     onKeydown: (e) => { if ((e as KeyboardEvent).key === "Escape") { stop(); } } },
@@ -186,9 +203,10 @@ export function hearPanel(opts: HearOpts): HTMLElement {
       stopBtn, tryBtn, h("span", { class: "spacer" }),
       h("button", { class: "linklike small", type: "button", onClick: () => closeHear() }, "Close")),
     textEl, cuesEl, status,
-    h("p", { class: "small muted hear-note" }, SYNTHETIC_NOTE, " ", COARSE_NOTE),
+    h("p", { class: "small muted hear-note" }, SYNTHETIC_NOTE, " ", noteEl),
     voicePicker("coach", "Coach voice"));
-  open = { panel, close: () => { stop(); unsub(); panel.remove(); } };
+  panel.addEventListener("voicechange", () => { const p = plans.get(key()); if (p) render(p); });
+  open = { panel, close: () => { stop(); unsub(); unnote(); panel.remove(); } };
   // Browsers load their voices a moment after the page: enable Hear it when they arrive.
   onVoicesChanged(() => { const p = plans.get(key()); if (p && panel.isConnected) render(p); });
   void load();
